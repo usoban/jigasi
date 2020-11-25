@@ -23,8 +23,10 @@ import org.jitsi.jigasi.util.Util;
 import org.jitsi.xmpp.extensions.jitsimeet.*;
 import org.jitsi.utils.logging.*;
 import org.jivesoftware.smack.packet.*;
-
+import si.dlabs.jearni.PCMAudioPublisher;
 import javax.media.format.*;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.*;
 import java.util.*;
 import java.util.concurrent.*;
@@ -152,13 +154,15 @@ public class Participant
      */
     private SilenceFilter silenceFilter = null;
 
+    private PCMAudioPublisher pcmAudioPublisher;
+
     /**
      * Create a participant with a given name and audio stream
      *
      * @param transcriber the transcriber which created this participant
      * @param identifier the string which is used to identify this participant
      */
-    Participant(Transcriber transcriber, String identifier)
+    public Participant(Transcriber transcriber, String identifier)
     {
         this(transcriber, identifier, false);
     }
@@ -173,6 +177,24 @@ public class Participant
     {
         this.transcriber = transcriber;
         this.identifier = identifier;
+
+        try
+        {
+            // TODO.
+            if (transcriber != null)
+            {
+                int sampleRate = (int)transcriber.getMediaDevice().getFormat().getClockRate();
+                pcmAudioPublisher = new PCMAudioPublisher(this, 16, sampleRate);
+            }
+        }
+        catch (IOException e)
+        {
+            throw new UncheckedIOException(e);
+        }
+        catch (TimeoutException e)
+        {
+            logger.error("Something timed out", e);
+        }
 
         if(filterAudio)
         {
