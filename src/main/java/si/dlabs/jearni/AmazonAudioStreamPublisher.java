@@ -31,9 +31,9 @@ public class AmazonAudioStreamPublisher implements Publisher<AudioStream>
 
     private class SubscriptionImpl implements Subscription
     {
-        private static final int CHUNK_SIZE_IN_BYTES = 1024 * 1;
-        private ExecutorService executor = Executors.newFixedThreadPool(1);
-        private AtomicLong demand = new AtomicLong(0);
+        private static final int CHUNK_SIZE_IN_BYTES = 1024;
+        private final ExecutorService executor = Executors.newFixedThreadPool(1);
+        private final AtomicLong demand = new AtomicLong(0);
 
         private final Subscriber<? super AudioStream> subscriber;
         private final InputStream inputStream;

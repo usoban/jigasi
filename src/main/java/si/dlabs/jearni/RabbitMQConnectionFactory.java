@@ -3,7 +3,6 @@ package si.dlabs.jearni;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
 import org.jitsi.utils.logging.Logger;
-
 import java.io.IOException;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
@@ -15,7 +14,8 @@ public class RabbitMQConnectionFactory
     private static Connection connection;
     private final static Logger logger = Logger.getLogger(RabbitMQConnectionFactory.class);
 
-    public static Connection getConnection() throws IOException, TimeoutException
+    public static Connection getConnection()
+            throws IOException, TimeoutException
     {
         if (connection == null)
         {
