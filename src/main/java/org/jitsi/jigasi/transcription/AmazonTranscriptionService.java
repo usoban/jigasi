@@ -1,4 +1,5 @@
 package org.jitsi.jigasi.transcription;
+// TODO: move to si.dlabs namespace
 
 import org.jitsi.utils.logging.Logger;
 import org.reactivestreams.Publisher;
@@ -45,7 +46,8 @@ public class AmazonTranscriptionService
     }
 
     @Override
-    public boolean supportsFragmentTranscription() {
+    public boolean supportsFragmentTranscription()
+    {
         return true;
     }
 
@@ -58,7 +60,8 @@ public class AmazonTranscriptionService
     }
 
     @Override
-    public boolean supportsStreamRecognition() {
+    public boolean supportsStreamRecognition()
+    {
         return true;
     }
 
@@ -72,13 +75,12 @@ public class AmazonTranscriptionService
     @Override
     public boolean isConfiguredProperly()
     {
-        return false;
+        return true;
     }
 
     public class AmazonStreamingRecognitionSession implements StreamingRecognitionSession
     {
         private final TranscribeStreamingAsyncClient client;
-
         private AmazonAudioStreamPublisher audioPublisher;
         private CompletableFuture<Void> streamTranscriptionFuture;
         private List<TranscriptionListener> transcriptionListeners = new LinkedList<TranscriptionListener>();
@@ -88,6 +90,7 @@ public class AmazonTranscriptionService
         {
             this.client = client;
             messageId = UUID.randomUUID();
+            logger.info("Amazon streaming recognition session initialized.");
         }
 
         protected StartStreamTranscriptionRequest buildStreamingRequest(TranscriptionRequest request)
@@ -104,6 +107,8 @@ public class AmazonTranscriptionService
                 throw new IllegalArgumentException("Audio format encoding not supported: ");
             }
 
+            // TODO: downsample from 48khz to 16khz
+            // https://github.com/waynetam/JavaSSRC/blob/master/src/main/java/ResamplerHelper.java
             int sampleRateInHertz = Double.valueOf(audioFormat.getSampleRate()).intValue();
 
             return StartStreamTranscriptionRequest
@@ -176,7 +181,8 @@ public class AmazonTranscriptionService
         @Override
         public void sendRequest(TranscriptionRequest request)
         {
-            if (ended())
+            // TODO: please use some fuckin flag in this place instead of state variable :<
+            if (streamTranscriptionFuture == null)
             {
                 try
                 {
@@ -201,7 +207,7 @@ public class AmazonTranscriptionService
         @Override
         public boolean ended()
         {
-            return streamTranscriptionFuture == null || streamTranscriptionFuture.isDone();
+            return streamTranscriptionFuture != null && streamTranscriptionFuture.isDone();
         }
 
         @Override
@@ -220,7 +226,7 @@ public class AmazonTranscriptionService
 
         public AmazonAudioStreamPublisher() throws IOException
         {
-            bytePipe = new BytePipe();
+            bytePipe = new BytePipe(32000);
         }
 
         @Override
@@ -282,6 +288,7 @@ public class AmazonTranscriptionService
                         }
                         else
                         {
+                            logger.info("Completed subscription task.");
                             subscriber.onComplete();
                             break;
                         }
@@ -289,6 +296,7 @@ public class AmazonTranscriptionService
                 }
                 catch (Exception e)
                 {
+                    logger.error("Subscription error ...", e);
                     subscriber.onError(e);
                 }
             });

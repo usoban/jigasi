@@ -33,11 +33,11 @@ public class PcmAudioPublisherTest
 
         Participant participant = new Participant(null, "Urban");
 
-        PCMAudioPublisher pcmAudioPublisher = new PCMAudioPublisher(
-                participant,
-                audioFormat.getSampleSizeInBits(),
-                (int)audioFormat.getSampleRate()
-        );
+//        PCMAudioPublisher pcmAudioPublisher = new PCMAudioPublisher(
+//                participant,
+//                audioFormat.getSampleSizeInBits(),
+//                (int)audioFormat.getSampleRate()
+//        );
 
         ExecutorService executor = Executors.newFixedThreadPool(1);
 
@@ -47,7 +47,7 @@ public class PcmAudioPublisherTest
             do
             {
                 buffer = getNextEvent(inputStream);
-                pcmAudioPublisher.buffer(buffer);
+//                pcmAudioPublisher.buffer(buffer);
             } while(true);
         });
     }

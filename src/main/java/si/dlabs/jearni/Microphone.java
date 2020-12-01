@@ -9,7 +9,7 @@ public class Microphone
 {
     public static TargetDataLine get() throws Exception
     {
-        AudioFormat format = new AudioFormat(16000, 16, 1, true, false);
+        AudioFormat format = new AudioFormat(48000, 16, 1, true, false);
         DataLine.Info datalineInfo = new DataLine.Info(TargetDataLine.class, format);
 
         TargetDataLine dataLine = (TargetDataLine) AudioSystem.getLine(datalineInfo);

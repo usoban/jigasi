@@ -4,6 +4,7 @@ import com.rabbitmq.client.*;
 import org.jitsi.jigasi.transcription.Participant;
 import org.jitsi.jigasi.transcription.Transcriber;
 import org.jitsi.utils.logging.Logger;
+import javax.media.format.AudioFormat;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
@@ -29,24 +30,23 @@ public class PCMAudioPublisher
 
     private int sampleRateInHertz;
 
-    public PCMAudioPublisher(Participant participant, int sampleSizeInBits, int sampleRateInHertz)
-            throws IOException, TimeoutException
+    public PCMAudioPublisher(Participant participant) throws IOException, TimeoutException
     {
-        this(sampleSizeInBits, sampleRateInHertz);
         this.participant = participant;
-    }
-
-    public PCMAudioPublisher(int sampleSizeInBits, int sampleRateInHertz)
-            throws IOException, TimeoutException
-    {
-        this.sampleSizeInBits = sampleSizeInBits;
-        this.sampleRateInHertz = sampleRateInHertz;
         mqConnection = RabbitMQConnectionFactory.getConnection();
         pcmAudioChannel = mqConnection.createChannel();
+        // TODO: move to configure audio format to compute big enough buffer size from sample size/rate!
         audioBytePipe = new BytePipe(64000);
 
         configureMq();
+        logger.info("Initialized PCMAudioPublisher; sample_size = " + sampleSizeInBits + ", sample_rate = " + sampleRateInHertz);
         loop();
+    }
+
+    public void configureAudioFormat(AudioFormat audioFormat)
+    {
+        sampleSizeInBits = audioFormat.getSampleSizeInBits();
+        sampleRateInHertz = (int) audioFormat.getSampleRate();
     }
 
     private void configureMq() throws IOException
@@ -79,7 +79,7 @@ public class PCMAudioPublisher
                 Map<String, Object> headers = new HashMap<>();
                 headers.put("sample_rate", this.sampleRateInHertz);
                 headers.put("sample_size_in_bits", this.sampleSizeInBits);
-                // TODO: order_index or message plz.
+                // TODO: order_index of message plz.
                 if (participant != null)
                 {
                     headers.put("participant_id", this.participant.getId());

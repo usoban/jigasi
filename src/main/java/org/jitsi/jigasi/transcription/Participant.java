@@ -24,6 +24,7 @@ import org.jitsi.xmpp.extensions.jitsimeet.*;
 import org.jitsi.utils.logging.*;
 import org.jivesoftware.smack.packet.*;
 import si.dlabs.jearni.PCMAudioPublisher;
+
 import javax.media.format.*;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -154,7 +155,7 @@ public class Participant
      */
     private SilenceFilter silenceFilter = null;
 
-    private PCMAudioPublisher pcmAudioPublisher;
+    private PCMAudioPublisher audioPublisher;
 
     /**
      * Create a participant with a given name and audio stream
@@ -180,12 +181,7 @@ public class Participant
 
         try
         {
-            // TODO.
-            if (transcriber != null)
-            {
-                int sampleRate = (int)transcriber.getMediaDevice().getFormat().getClockRate();
-                pcmAudioPublisher = new PCMAudioPublisher(this, 16, sampleRate);
-            }
+            audioPublisher = new PCMAudioPublisher(this);
         }
         catch (IOException e)
         {
@@ -582,9 +578,25 @@ public class Participant
         if (audioFormat == null)
         {
             audioFormat = (AudioFormat) buffer.getFormat();
+
+            if (audioPublisher != null)
+            {
+                audioPublisher.configureAudioFormat(audioFormat);
+            }
         }
 
         byte[] audio = (byte[]) buffer.getData();
+
+//        if (audioPublisher != null)
+//        {
+//            try
+//            {
+//                audioPublisher.buffer(audio);
+//            } catch (IOException e)
+//            {
+//                throw new UncheckedIOException(e);
+//            }
+//        }
 
         if (USE_LOCAL_BUFFER)
         {
