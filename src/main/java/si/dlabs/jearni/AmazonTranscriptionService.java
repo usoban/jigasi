@@ -1,11 +1,12 @@
-package org.jitsi.jigasi.transcription;
-// TODO: move to si.dlabs namespace
+package si.dlabs.jearni;
 
+import org.jitsi.jigasi.JigasiBundleActivator;
+import org.jitsi.jigasi.transcription.*;
+import org.jitsi.service.configuration.ConfigurationService;
 import org.jitsi.utils.logging.Logger;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
-import si.dlabs.jearni.BytePipe;
 import software.amazon.awssdk.auth.credentials.EnvironmentVariableCredentialsProvider;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.transcribestreaming.TranscribeStreamingAsyncClient;
@@ -27,22 +28,63 @@ import java.util.function.Consumer;
 public class AmazonTranscriptionService
     implements TranscriptionService
 {
-    public final static String[] SUPPORTED_LANGUAGE_TAGS = new String[] {
-            LanguageCode.EN_US.toString(),
-            LanguageCode.EN_GB.toString()
-    };
+    private static String PROP_BUFFER_MILLISECONDS = "org.jitsi.jigasi.transcription.AMAZON_BUFFER_MILLISECONDS";
+    private static int PROP_BUFFER_MILLISECONDS_DEFAULT = 500;
 
+//    public final static String[] SUPPORTED_LANGUAGE_TAGS = new String[] {
+//            LanguageCode.EN_US.toString(),
+//            LanguageCode.EN_GB.toString()
+//    };
+
+    /**
+     * Logger instance.
+     */
     private final static Logger logger
             = Logger.getLogger(AmazonTranscriptionService.class);
 
+    /**
+     * Amazon transcribing client.
+     */
     private TranscribeStreamingAsyncClient client;
 
+    /**
+     * The number of milliseconds we want to buffer the audio before sending it to transcription service.
+     */
+    private int bufferSizeMilliseconds;
+
+    /**
+     * Computed number of bytes required to satisfy the buffer length in milliseconds (depends on audio format).
+     */
+    private int bufferSize;
+
+    @SuppressWarnings("WeakerAccess")
     public AmazonTranscriptionService()
     {
         client = TranscribeStreamingAsyncClient
                 .builder()
                 .credentialsProvider(EnvironmentVariableCredentialsProvider.create())
                 .build();
+
+        configure();
+    }
+
+    private void configure()
+    {
+        ConfigurationService configurationService = JigasiBundleActivator.getConfigurationService();
+        if (configurationService != null)
+        {
+
+            bufferSizeMilliseconds = configurationService.getInt(
+                    PROP_BUFFER_MILLISECONDS,
+                    PROP_BUFFER_MILLISECONDS_DEFAULT
+            );
+        }
+        else
+        {
+            bufferSizeMilliseconds = PROP_BUFFER_MILLISECONDS_DEFAULT;
+        }
+
+        logger.info("Amazon Transcribe buffer = " + bufferSizeMilliseconds + "ms.");
     }
 
     @Override
@@ -86,10 +128,15 @@ public class AmazonTranscriptionService
         private List<TranscriptionListener> transcriptionListeners = new LinkedList<TranscriptionListener>();
         private UUID messageId;
 
+        private ExecutorService readExecutor = Executors.newSingleThreadExecutor();
+
         public AmazonStreamingRecognitionSession(TranscribeStreamingAsyncClient client)
         {
             this.client = client;
             messageId = UUID.randomUUID();
+
+            addTranscriptionListener(new MqTranscriptPublisher());
+
             logger.info("Amazon streaming recognition session initialized.");
         }
 
@@ -97,9 +144,10 @@ public class AmazonTranscriptionService
         {
             AudioFormat audioFormat = request.getFormat();
 
-            logger.info("Encoding is " + audioFormat.getEncoding());
+            logger.info("Audio encoding is " + audioFormat.toString());
 
             if (
+                    // TODO: only accept LINEAR actually, this PCM_SIGNED is for testing purposes from microphone.
                     !audioFormat.getEncoding().equals(AudioFormat.LINEAR) &&
                     !audioFormat.getEncoding().equals("PCM_SIGNED")
             )
@@ -107,8 +155,6 @@ public class AmazonTranscriptionService
                 throw new IllegalArgumentException("Audio format encoding not supported: ");
             }
 
-            // TODO: downsample from 48khz to 16khz
-            // https://github.com/waynetam/JavaSSRC/blob/master/src/main/java/ResamplerHelper.java
             int sampleRateInHertz = Double.valueOf(audioFormat.getSampleRate()).intValue();
 
             return StartStreamTranscriptionRequest
@@ -132,11 +178,10 @@ public class AmazonTranscriptionService
             return (TranscriptResultStream e) -> {
                 TranscriptEvent event = (TranscriptEvent) e;
 
-                logger.info(e.toString());
+                logger.info(event.toString());
 
                 if (event.transcript().results().size() < 1)
                 {
-                    logger.info("Transcription returned no results.");
                     return;
                 }
 
@@ -169,38 +214,51 @@ public class AmazonTranscriptionService
 
         protected void startStreamingRequest(TranscriptionRequest transcriptionRequest) throws IOException
         {
+            // Set up buffers and the publisher.
+            AudioFormat audioFormat = transcriptionRequest.getFormat();
+            int samplesPerMs = new Double(audioFormat.getSampleRate() / 1000.0).intValue(); // number of samples per millisecond.
+            int bytesPerSample = audioFormat.getSampleSizeInBits() / 8;
+            bufferSize = bufferSizeMilliseconds * samplesPerMs * bytesPerSample;
+
+            logger.info("Buffer size for " + bufferSizeMilliseconds + "ms is " + bufferSize + " bytes.");
+
             StartStreamTranscriptionRequest request = buildStreamingRequest(transcriptionRequest);
             StartStreamTranscriptionResponseHandler responseHandler = buildStreamingResponseHandler();
             audioPublisher = new AmazonAudioStreamPublisher();
 
             logger.info("Starting stream transcription.....");
+
             streamTranscriptionFuture = client.startStreamTranscription(request, audioPublisher, responseHandler);
+
             logger.info("Stream transcription started.");
         }
 
         @Override
         public void sendRequest(TranscriptionRequest request)
         {
-            // TODO: please use some fuckin flag in this place instead of state variable :<
-            if (streamTranscriptionFuture == null)
-            {
-                try
+            readExecutor.submit(() -> {
+                // TODO: please use some fuckin flag in this place instead of state variable :<
+                if (streamTranscriptionFuture == null)
                 {
-                    startStreamingRequest(request);
+                    try
+                    {
+                        startStreamingRequest(request);
+                    }
+                    catch (IOException e)
+                    {
+                        logger.error("Error starting streaming request", e);
+                    }
                 }
-                catch (IOException e)
-                {
-                    logger.error("Error starting streaming request", e);
-                }
-            }
 
-            audioPublisher.pushAudioBytes(request.getAudio());
+                audioPublisher.pushAudioBytes(request.getAudio());
+            });
         }
 
         @Override
         public void end()
         {
             // TODO: this is probably wrong? Should we cancel streamTranscriptionFuture?
+            // TODO: cancel executor services!!
             this.client.close();
         }
 
@@ -224,9 +282,10 @@ public class AmazonTranscriptionService
     {
         private final BytePipe bytePipe;
 
-        public AmazonAudioStreamPublisher() throws IOException
+        public AmazonAudioStreamPublisher()
+                throws IOException
         {
-            bytePipe = new BytePipe(32000);
+            bytePipe = new BytePipe(bufferSize * 100);
         }
 
         @Override
@@ -296,7 +355,7 @@ public class AmazonTranscriptionService
                 }
                 catch (Exception e)
                 {
-                    logger.error("Subscription error ...", e);
+                    logger.error("Subscription error occurred.", e);
                     subscriber.onError(e);
                 }
             });
@@ -311,8 +370,8 @@ public class AmazonTranscriptionService
         private ByteBuffer getNextAudioChunk()
         {
             ByteBuffer audioBuffer;
-            byte[] audioBytes = new byte[1024];
-            int len = 0;
+            byte[] audioBytes = new byte[bufferSize];
+            int len;
 
             try
             {

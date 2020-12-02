@@ -7,11 +7,6 @@ public class BytePipe
     private final PipedInputStream inputPipe;
     private final PipedOutputStream outputPipe;
 
-    public BytePipe() throws IOException
-    {
-        this(1024);
-    }
-
     public BytePipe(int bufferSize) throws IOException
     {
         inputPipe = new PipedInputStream(bufferSize);

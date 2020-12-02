@@ -24,7 +24,6 @@ import org.jitsi.xmpp.extensions.jitsimeet.*;
 import org.jitsi.utils.logging.*;
 import org.jivesoftware.smack.packet.*;
 import si.dlabs.jearni.PCMAudioPublisher;
-
 import javax.media.format.*;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -69,7 +68,7 @@ public class Participant
     /**
      * Whether we should buffer locally before sending
      */
-    private static final boolean USE_LOCAL_BUFFER = true;
+    private static final boolean USE_LOCAL_BUFFER = false;
 
     /**
      * The string to use when a participant's name is unknown.
@@ -155,6 +154,9 @@ public class Participant
      */
     private SilenceFilter silenceFilter = null;
 
+    /**
+     * Publisher of PCM audio.
+     */
     private PCMAudioPublisher audioPublisher;
 
     /**
@@ -581,22 +583,29 @@ public class Participant
 
             if (audioPublisher != null)
             {
-                audioPublisher.configureAudioFormat(audioFormat);
+                try
+                {
+                    audioPublisher.configureAudioFormat(audioFormat);
+                }
+                catch (IOException e)
+                {
+                    throw new UncheckedIOException(e);
+                }
             }
         }
 
         byte[] audio = (byte[]) buffer.getData();
 
-//        if (audioPublisher != null)
-//        {
-//            try
-//            {
-//                audioPublisher.buffer(audio);
-//            } catch (IOException e)
-//            {
-//                throw new UncheckedIOException(e);
-//            }
-//        }
+        if (audioPublisher != null)
+        {
+            try
+            {
+                audioPublisher.buffer(audio);
+            } catch (IOException e)
+            {
+                throw new UncheckedIOException(e);
+            }
+        }
 
         if (USE_LOCAL_BUFFER)
         {

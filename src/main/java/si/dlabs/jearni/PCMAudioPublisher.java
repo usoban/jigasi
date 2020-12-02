@@ -11,6 +11,8 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class PCMAudioPublisher
 {
@@ -30,23 +32,32 @@ public class PCMAudioPublisher
 
     private int sampleRateInHertz;
 
+    private int nBytesForOneSecond;
+
+    private AtomicBoolean isConfigured = new AtomicBoolean(false);
+
+    private AtomicInteger messageCounter = new AtomicInteger(0);
+
     public PCMAudioPublisher(Participant participant) throws IOException, TimeoutException
     {
         this.participant = participant;
         mqConnection = RabbitMQConnectionFactory.getConnection();
         pcmAudioChannel = mqConnection.createChannel();
-        // TODO: move to configure audio format to compute big enough buffer size from sample size/rate!
-        audioBytePipe = new BytePipe(64000);
 
         configureMq();
-        logger.info("Initialized PCMAudioPublisher; sample_size = " + sampleSizeInBits + ", sample_rate = " + sampleRateInHertz);
         loop();
     }
 
-    public void configureAudioFormat(AudioFormat audioFormat)
+    public void configureAudioFormat(AudioFormat audioFormat) throws IOException
     {
         sampleSizeInBits = audioFormat.getSampleSizeInBits();
         sampleRateInHertz = (int) audioFormat.getSampleRate();
+        nBytesForOneSecond = sampleRateInHertz * (sampleSizeInBits/8);
+        audioBytePipe = new BytePipe(nBytesForOneSecond * 5); // 5s of buffer
+
+        logger.info("Configured PCMAudioPublisher; sample_size = " + sampleSizeInBits + ", sample_rate = " + sampleRateInHertz);
+
+        isConfigured.set(true);
     }
 
     private void configureMq() throws IOException
@@ -56,30 +67,35 @@ public class PCMAudioPublisher
         pcmAudioChannel.queueBind("test-audio", "amq.direct", "test-audio");
     }
 
-    public void buffer(byte[] audioBytes) throws IOException
+    public void buffer(byte[] audioBytes)
+            throws IOException
     {
         audioBytePipe.write(audioBytes);
     }
 
     private void loop()
     {
-        int oneSecondBytes = 32000;
-
         executor.submit(() -> {
             while(true)
             {
-                if (audioBytePipe.available() < oneSecondBytes)
+                if (!isConfigured.get())
                 {
                     continue;
                 }
 
-                byte[] buff = new byte[oneSecondBytes];
-                audioBytePipe.read(buff);
+                if (audioBytePipe.available() < nBytesForOneSecond)
+                {
+                    continue;
+                }
+
+                byte[] audioData = new byte[nBytesForOneSecond];
+                audioBytePipe.read(audioData);
 
                 Map<String, Object> headers = new HashMap<>();
                 headers.put("sample_rate", this.sampleRateInHertz);
                 headers.put("sample_size_in_bits", this.sampleSizeInBits);
-                // TODO: order_index of message plz.
+                headers.put("order_index", this.messageCounter.getAndIncrement());
+
                 if (participant != null)
                 {
                     headers.put("participant_id", this.participant.getId());
@@ -99,13 +115,11 @@ public class PCMAudioPublisher
                         .priority(1)
                         .build();
 
-                logger.debug("Published a message with 1s of audio.");
-
                 pcmAudioChannel.basicPublish(
                         "amq.direct",
                         "test-audio",
                         properties,
-                        buff
+                        audioData
                 );
             }
         });

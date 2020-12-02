@@ -3,11 +3,8 @@ package si.dlabs.jearni;
 import javax.media.format.AudioFormat;
 import javax.sound.sampled.TargetDataLine;
 import javax.sound.sampled.AudioInputStream;
-
-import org.jitsi.jigasi.transcription.AmazonTranscriptionService;
 import org.jitsi.jigasi.transcription.TranscriptionRequest;
 import org.jitsi.jigasi.transcription.TranscriptionService;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -52,7 +49,7 @@ public class TranscribeTest {
     private static byte[] getNextEvent(InputStream inputStream)
     {
         ByteBuffer audioBuffer;
-        byte[] audioBytes = new byte[1024];
+        byte[] audioBytes = new byte[1920];
         int len = 0;
 
         try

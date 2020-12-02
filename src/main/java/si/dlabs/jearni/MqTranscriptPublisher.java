@@ -5,19 +5,12 @@ import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import org.jitsi.jigasi.transcription.*;
 import org.jitsi.utils.logging.Logger;
-import software.amazon.awssdk.auth.credentials.EnvironmentVariableCredentialsProvider;
-import software.amazon.awssdk.core.sync.RequestBody;
-import software.amazon.awssdk.regions.Region;
-import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import java.io.IOException;
 import java.util.concurrent.TimeoutException;
 
 public class MqTranscriptPublisher
     implements TranscriptionListener
 {
-    private final S3Client client;
-
     private final static Logger logger
             = Logger.getLogger(MqTranscriptPublisher.class);
 
@@ -45,13 +38,6 @@ public class MqTranscriptPublisher
         {
             logger.error("Timeout establishing connection to message exchange", e);
         }
-
-        Region region = Region.EU_WEST_1;
-        client = S3Client
-            .builder()
-            .region(region)
-            .credentialsProvider(EnvironmentVariableCredentialsProvider.create())
-            .build();
     }
 
     private void configureMq() throws IOException
@@ -61,21 +47,6 @@ public class MqTranscriptPublisher
         pcmAudioChannel.exchangeDeclare(exchangeName, "fanout", true);
         pcmAudioChannel.queueDeclare(queueName, true, false, false, null);
         pcmAudioChannel.queueBind(queueName, exchangeName, routingKey);
-    }
-
-    private void upload(String transcript)
-    {
-        String key = System.currentTimeMillis() + ".txt";
-
-        PutObjectRequest objectRequest = PutObjectRequest
-                .builder()
-                .bucket("jearni-dev")
-                .key(key)
-                .build();
-
-        logger.info("Attempting to upload");
-        client.putObject(objectRequest, RequestBody.fromString(transcript));
-        logger.info("Uploaded :)");
     }
 
     private void send(String transcript)
@@ -116,7 +87,6 @@ public class MqTranscriptPublisher
                 txt.append(alt.getTranscription()).append(", ");
             });
 
-//        upload(txt.toString());
             send(txt.toString());
         }
         else
