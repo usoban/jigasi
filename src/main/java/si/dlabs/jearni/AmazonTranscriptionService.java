@@ -111,7 +111,7 @@ public class AmazonTranscriptionService
     public StreamingRecognitionSession initStreamingSession(Participant participant)
             throws UnsupportedOperationException
     {
-        return new AmazonStreamingRecognitionSession(client);
+        return new AmazonStreamingRecognitionSession(participant, client);
     }
 
     @Override
@@ -127,15 +127,18 @@ public class AmazonTranscriptionService
         private CompletableFuture<Void> streamTranscriptionFuture;
         private List<TranscriptionListener> transcriptionListeners = new LinkedList<TranscriptionListener>();
         private UUID messageId;
+        private Participant participant;
+        private AmazonTranscriptResultPublisher resultPublisher;
 
         private ExecutorService readExecutor = Executors.newSingleThreadExecutor();
 
-        public AmazonStreamingRecognitionSession(TranscribeStreamingAsyncClient client)
+        public AmazonStreamingRecognitionSession(Participant participant, TranscribeStreamingAsyncClient client)
         {
+            this.participant = participant;
             this.client = client;
             messageId = UUID.randomUUID();
 
-            addTranscriptionListener(new MqTranscriptPublisher());
+            resultPublisher = new AmazonTranscriptResultPublisher(participant);
 
             logger.info("Amazon streaming recognition session initialized.");
         }
@@ -152,7 +155,7 @@ public class AmazonTranscriptionService
                     !audioFormat.getEncoding().equals("PCM_SIGNED")
             )
             {
-                throw new IllegalArgumentException("Audio format encoding not supported: ");
+                throw new IllegalArgumentException("Audio format encoding not supported: " + audioFormat.toString());
             }
 
             int sampleRateInHertz = Double.valueOf(audioFormat.getSampleRate()).intValue();
@@ -184,6 +187,8 @@ public class AmazonTranscriptionService
                 {
                     return;
                 }
+
+                resultPublisher.publish(event);
 
                 Result firstResult = event.transcript().results().get(0);
 

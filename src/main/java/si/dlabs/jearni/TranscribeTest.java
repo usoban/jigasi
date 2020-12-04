@@ -17,7 +17,7 @@ public class TranscribeTest {
     public static void main(String[] args) throws Exception
     {
         AmazonTranscriptionService transcriptionService = new AmazonTranscriptionService();
-        MqTranscriptPublisher s3TranscriptPublisher = new MqTranscriptPublisher();
+        AmazonTranscriptResultPublisher s3TranscriptPublisher = new AmazonTranscriptResultPublisher();
         TranscriptionService.StreamingRecognitionSession session = transcriptionService.initStreamingSession(null);
 
         session.addTranscriptionListener(s3TranscriptPublisher);
