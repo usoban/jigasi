@@ -11,7 +11,7 @@ DEB_BUILD_OPTIONS=noddebs nostrip
 	dh $@
 
 override_dh_auto_clean:
-	#mvn -Dmaven.repo.local=${HOME}/.m2/repository clean
+	mvn -Dmaven.repo.local=${HOME}/.m2/repository clean
 
 override_dh_auto_configure:
 	# do nothing

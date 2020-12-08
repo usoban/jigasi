@@ -2,7 +2,6 @@ package si.dlabs.jearni;
 
 import com.rabbitmq.client.*;
 import org.jitsi.jigasi.transcription.Participant;
-import org.jitsi.jigasi.transcription.Transcriber;
 import org.jitsi.utils.logging.Logger;
 import javax.media.format.AudioFormat;
 import java.io.IOException;
@@ -89,32 +88,38 @@ public class PCMAudioPublisher
                     continue;
                 }
 
-                Transcriber transcriber = participant.getTranscriber();
-                String participantId = participant.getId();
-                String conferenceId = transcriber.getRoomName();
-                String routingKey = conferenceId + "." + participantId;
 
                 byte[] audioData = new byte[nBytesForOneSecond];
                 audioBytePipe.read(audioData);
 
-                Map<String, Object> headers = new HashMap<>();
-                headers.put("speaker_id", participantId);
-                headers.put("speaker_name", this.participant.getName());
-                headers.put("conference_id", conferenceId);
-                headers.put("sample_rate", this.sampleRateInHertz);
-                headers.put("sample_size_in_bits", this.sampleSizeInBits);
-                headers.put("order_index", this.messageCounter.getAndIncrement());
-
-                AMQP.BasicProperties properties = new AMQP.BasicProperties.Builder()
-                        .contentType("application/octet-stream")
-                        .headers(headers)
-                        .deliveryMode(2)
-                        .priority(1)
-                        .build();
-
-                pcmAudioChannel.basicPublish(EXCHANGE_NAME, routingKey, properties, audioData);
+                publishAudioMessage(audioData);
             }
         });
+    }
+
+    private void publishAudioMessage(byte[] audioData)
+            throws IOException
+    {
+        String participantId = participant.getId();
+        String conferenceId = Utils.getCleanRoomName(participant);
+        String routingKey = conferenceId + "." + participantId;
+
+        Map<String, Object> headers = new HashMap<>();
+        headers.put("speaker_id", participantId);
+        headers.put("speaker_name", this.participant.getName());
+        headers.put("conference_id", conferenceId);
+        headers.put("sample_rate", this.sampleRateInHertz);
+        headers.put("sample_size_in_bits", this.sampleSizeInBits);
+        headers.put("order_index", this.messageCounter.getAndIncrement());
+
+        AMQP.BasicProperties properties = new AMQP.BasicProperties.Builder()
+                .contentType("application/octet-stream")
+                .headers(headers)
+                .deliveryMode(2)
+                .priority(1)
+                .build();
+
+        pcmAudioChannel.basicPublish(EXCHANGE_NAME, routingKey, properties, audioData);
     }
 
     public void end()

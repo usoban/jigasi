@@ -15,11 +15,11 @@ public class Sentence
 
     private double endTime;
 
-    private final StringBuilder content = new StringBuilder();
-
     private final List<String> tokens = new LinkedList<>();
 
     private SentenceType type;
+
+    private int wordCount;
 
     public Sentence(double startTime)
     {
@@ -59,6 +59,7 @@ public class Sentence
     public void addUtterance(String utterance)
     {
         tokens.add(utterance);
+        wordCount++;
     }
 
     public void addComma()
@@ -99,6 +100,11 @@ public class Sentence
         }
 
         return builder.toString();
+    }
+
+    public int getWordCount()
+    {
+        return wordCount;
     }
 
     public boolean isEmpty()

@@ -146,15 +146,17 @@ public class AmazonTranscriptResultPublisher
 
     private void publishSentence(Sentence sentence)
     {
-        String conferenceId = participant.getTranscriber().getRoomName();
+        String conferenceId = Utils.getCleanRoomName(participant);
         JSONObject json = new JSONObject();
 
         json.put("conversation_id", conferenceId);
         json.put("speaker_id", participant.getId());
         json.put("start_time", sentence.getStartTime());
         json.put("end_time", sentence.getEndTime());
+        json.put("text", sentence.getContent());
+        json.put("word_count", sentence.getWordCount());
         json.put("sentence_type", sentence.getTypeString());
-        json.put("length",  sentence.getEndTime() - sentence.getStartTime());
+        json.put("sentence_speaking_time",  sentence.getEndTime() - sentence.getStartTime());
 
         String stringJson = json.toString();
         if (stringJson == null)
@@ -186,7 +188,7 @@ public class AmazonTranscriptResultPublisher
      */
     private void publishRawTranscriptResult(Result transcriptResult)
     {
-        String conferenceId = participant.getTranscriber().getRoomName();
+        String conferenceId = Utils.getCleanRoomName(participant);
         JSONObject resultRawJson = resultToRawJson(transcriptResult);
         String stringJson = resultRawJson.toString();
 
@@ -220,7 +222,7 @@ public class AmazonTranscriptResultPublisher
     /**
      * Converts Amazon Streaming Transcription result to its JSON form.
      *
-     * {@link https://docs.aws.amazon.com/transcribe/latest/dg/API_streaming_Result.html}
+     * @see <a href="https://docs.aws.amazon.com/transcribe/latest/dg/API_streaming_Result.html">API Streaming Result</a>
      *
      * @param transcriptResult Amazon Streaming Transcription result object
      * @return JSON form
@@ -244,7 +246,7 @@ public class AmazonTranscriptResultPublisher
     /**
      * Converts Amazon Streaming Transcription result's alternative to its JSON form.
      *
-     * {@link https://docs.aws.amazon.com/transcribe/latest/dg/API_streaming_Alternative.html}
+     * @see <a href="https://docs.aws.amazon.com/transcribe/latest/dg/API_streaming_Alternative.html">API Streaming Alternative</a>
      *
      * @param transcriptResultAlternative Amazon Streaming Transcription Result Alternative
      * @return JSON form
@@ -271,32 +273,6 @@ public class AmazonTranscriptResultPublisher
 
         return json;
     }
-
-//    private void send(String transcript)
-//    {
-//        AMQP.BasicProperties properties = new AMQP.BasicProperties.Builder()
-//                .contentType("text/plain")
-////                .headers(headers)
-//                .deliveryMode(2)
-//                .priority(1)
-//                .build();
-//
-//        try
-//        {
-//            transcriptChannel.basicPublish(
-//                    exchangeName,
-//                    routingKey,
-//                    properties,
-//                    transcript.getBytes()
-//            );
-//
-//            logger.debug("Published a transcript.");
-//        }
-//        catch (IOException e)
-//        {
-//            logger.error("Exception converting transcript to bytes", e);
-//        }
-//    }
 
 //    @Override
 //    public void notify(TranscriptionResult result)
