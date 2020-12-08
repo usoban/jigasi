@@ -7,14 +7,53 @@ public class Sentence
 {
     public enum SentenceType
     {
-        QUESTION, NON_QUESTION
+        QUESTION,
+        NON_QUESTION
     }
 
-    private StringBuilder content = new StringBuilder();
+    private double startTime;
 
-    private List<String> tokens = new LinkedList<>();
+    private double endTime;
+
+    private final StringBuilder content = new StringBuilder();
+
+    private final List<String> tokens = new LinkedList<>();
 
     private SentenceType type;
+
+    public Sentence(double startTime)
+    {
+        this.startTime = startTime;
+    }
+
+    public double getStartTime()
+    {
+        return startTime;
+    }
+
+    public double getEndTime()
+    {
+        return endTime;
+    }
+
+    public String getTypeString()
+    {
+        switch (type)
+        {
+            case QUESTION:
+                return "question";
+
+            case NON_QUESTION:
+            default:
+                return "non_question";
+        }
+    }
+
+    public void finish(SentenceType type, double endTime)
+    {
+        this.type = type;
+        this.endTime = endTime;
+    }
 
     // TODO: check if utterance is good term for words and other stuff such as "Umm", "Mmm", ...
     public void addUtterance(String utterance)
@@ -25,11 +64,6 @@ public class Sentence
     public void addComma()
     {
         tokens.add(",");
-    }
-
-    public void setType(SentenceType type)
-    {
-        this.type = type;
     }
 
     public String getContent()

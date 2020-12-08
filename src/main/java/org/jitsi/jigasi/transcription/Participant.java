@@ -560,6 +560,11 @@ public class Participant
         {
             session.end();
         }
+
+        if (audioPublisher != null)
+        {
+            audioPublisher.end();
+        }
     }
 
     /**

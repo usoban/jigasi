@@ -17,10 +17,8 @@ public class TranscribeTest {
     public static void main(String[] args) throws Exception
     {
         AmazonTranscriptionService transcriptionService = new AmazonTranscriptionService();
-        AmazonTranscriptResultPublisher s3TranscriptPublisher = new AmazonTranscriptResultPublisher();
+        AmazonTranscriptResultPublisher s3TranscriptPublisher = new AmazonTranscriptResultPublisher(null);
         TranscriptionService.StreamingRecognitionSession session = transcriptionService.initStreamingSession(null);
-
-        session.addTranscriptionListener(s3TranscriptPublisher);
 
         TargetDataLine mic = Microphone.get();
         mic.start();

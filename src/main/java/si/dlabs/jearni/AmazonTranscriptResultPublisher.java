@@ -1,6 +1,6 @@
 package si.dlabs.jearni;
 
-import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.*;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import org.jitsi.jigasi.transcription.*;
@@ -9,7 +9,6 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import software.amazon.awssdk.services.transcribestreaming.model.*;
 import software.amazon.awssdk.services.transcribestreaming.model.TranscriptEvent;
-
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
@@ -18,20 +17,19 @@ import java.util.concurrent.TimeoutException;
 // TODO: Remove TranscriptionListener interface - or swap with TranscriptionEventListener interface?
 
 public class AmazonTranscriptResultPublisher
-    implements TranscriptionListener
 {
+    private static final String RAW_TRANSCRIPT_EXCHANGE_NAME = "raw-transcript";
+
+    private static final String TRANSCRIPT_EXCHANGE_NAME = "transcript";
+
     private final static Logger logger
             = Logger.getLogger(AmazonTranscriptResultPublisher.class);
 
-    private Participant participant;
+    private final Participant participant;
 
     private Connection mqConnection;
 
     private Channel transcriptChannel;
-
-    private String exchangeName = "speech-transcription";
-
-    private String routingKey = "test";
 
     public AmazonTranscriptResultPublisher(Participant participant)
     {
@@ -39,9 +37,7 @@ public class AmazonTranscriptResultPublisher
 
         try
         {
-            mqConnection = RabbitMQConnectionFactory.getConnection();
-            transcriptChannel = mqConnection.createChannel();
-            this.configureMq();
+            configureMq();
         }
         catch (IOException e)
         {
@@ -53,19 +49,18 @@ public class AmazonTranscriptResultPublisher
         }
     }
 
-    private void configureMq() throws IOException
+    private void configureMq()
+            throws IOException, TimeoutException
     {
-        String queueName = "speech-transcription-permanent-storage";
+        mqConnection = RabbitMQConnectionFactory.getConnection();
+        transcriptChannel = mqConnection.createChannel();
 
-        transcriptChannel.exchangeDeclare(exchangeName, "fanout", true);
-        transcriptChannel.queueDeclare(queueName, true, false, false, null);
-        transcriptChannel.queueBind(queueName, exchangeName, routingKey);
+        transcriptChannel.exchangeDeclarePassive(RAW_TRANSCRIPT_EXCHANGE_NAME);
+        transcriptChannel.exchangeDeclarePassive(TRANSCRIPT_EXCHANGE_NAME);
     }
 
     public void publish(TranscriptEvent transcriptEvent)
     {
-        // TODO.
-        // 1. extract
         Result result = transcriptEvent.transcript().results().get(0);
 
         if (result.isPartial())
@@ -77,18 +72,29 @@ public class AmazonTranscriptResultPublisher
 
         Alternative firstAlternative = result.alternatives().get(0);
 
-        // TODO: send transcript 'payload' data structure
+        List<Sentence> sentences = breakAlternativeIntoSentences(firstAlternative);
+
+        for (Sentence s : sentences)
+        {
+            logger.info("Sentence: " + s.getContent());
+            publishSentence(s);
+        }
     }
 
     private List<Sentence> breakAlternativeIntoSentences(Alternative transcriptAlternative)
     {
         List<Sentence> sentences = new LinkedList<>();
-        Sentence currentSentence = new Sentence();
+        Sentence currentSentence = null;
 
-        Item[] items = (Item[])transcriptAlternative.items().toArray();
+        List<Item> items = transcriptAlternative.items();
 
         for (Item item : items)
         {
+            if (currentSentence == null)
+            {
+                currentSentence = new Sentence(item.startTime());
+            }
+
             if (item.type().equals(ItemType.PUNCTUATION))
             {
                 String content = item.content();
@@ -96,15 +102,15 @@ public class AmazonTranscriptResultPublisher
                 switch (content) {
                     case ".":
                     case "!":
-                        currentSentence.setType(Sentence.SentenceType.NON_QUESTION);
+                        currentSentence.finish(Sentence.SentenceType.NON_QUESTION, item.endTime());
                         sentences.add(currentSentence);
-                        currentSentence = new Sentence();
+                        currentSentence = null;
                         break;
 
                     case "?":
-                        currentSentence.setType(Sentence.SentenceType.QUESTION);
+                        currentSentence.finish(Sentence.SentenceType.QUESTION, item.endTime());
                         sentences.add(currentSentence);
-                        currentSentence = new Sentence();
+                        currentSentence = null;
                         break;
 
                     case ",":
@@ -128,7 +134,7 @@ public class AmazonTranscriptResultPublisher
             }
         }
 
-        if (!currentSentence.isEmpty())
+        if (currentSentence != null && currentSentence.isEmpty())
         {
             // Could it happen that alternative ends without a punctuation?
             sentences.add(currentSentence);
@@ -138,6 +144,41 @@ public class AmazonTranscriptResultPublisher
         return sentences;
     }
 
+    private void publishSentence(Sentence sentence)
+    {
+        String conferenceId = participant.getTranscriber().getRoomName();
+        JSONObject json = new JSONObject();
+
+        json.put("conversation_id", conferenceId);
+        json.put("speaker_id", participant.getId());
+        json.put("start_time", sentence.getStartTime());
+        json.put("end_time", sentence.getEndTime());
+        json.put("sentence_type", sentence.getTypeString());
+        json.put("length",  sentence.getEndTime() - sentence.getStartTime());
+
+        String stringJson = json.toString();
+        if (stringJson == null)
+        {
+            logger.error("Something went wrong while transforming JSON object to its string representation.");
+            return;
+        }
+
+        try
+        {
+            AMQP.BasicProperties properties = new AMQP.BasicProperties.Builder()
+                    .contentType("application/json")
+                    .deliveryMode(2)
+                    .priority(1)
+                    .build();
+
+            transcriptChannel.basicPublish(TRANSCRIPT_EXCHANGE_NAME, conferenceId, properties, stringJson.getBytes());
+        }
+        catch (IOException e)
+        {
+            logger.error("Error publishing transcript to exchange", e);
+        }
+    }
+
     /**
      * Publishes a raw Amazon's transcribe streaming result
      *
@@ -145,9 +186,35 @@ public class AmazonTranscriptResultPublisher
      */
     private void publishRawTranscriptResult(Result transcriptResult)
     {
+        String conferenceId = participant.getTranscriber().getRoomName();
         JSONObject resultRawJson = resultToRawJson(transcriptResult);
+        String stringJson = resultRawJson.toString();
 
-        // TODO: publish :)
+        if (stringJson == null)
+        {
+            logger.error("Something went wrong transforming raw transcript to its string representation.");
+            return;
+        }
+
+        try
+        {
+            AMQP.BasicProperties properties = new AMQP.BasicProperties.Builder()
+                    .contentType("application/json")
+                    .deliveryMode(2)
+                    .priority(1)
+                    .build();
+
+            transcriptChannel.basicPublish(
+                    RAW_TRANSCRIPT_EXCHANGE_NAME,
+                    conferenceId,
+                    properties,
+                    stringJson.getBytes()
+            );
+        }
+        catch (IOException e)
+        {
+            logger.error("Error publishing raw transcript to exchange", e);
+        }
     }
 
     /**
@@ -202,63 +269,61 @@ public class AmazonTranscriptResultPublisher
         json.put("Transcript", transcriptResultAlternative.transcript());
         json.put("Items", new JSONArray(itemsJson));
 
-
         return json;
     }
 
-    private void send(String transcript)
-    {
-        AMQP.BasicProperties properties = new AMQP.BasicProperties.Builder()
-                .contentType("text/plain")
-//                .headers(headers)
-                .deliveryMode(2)
-                .priority(1)
-                .build();
+//    private void send(String transcript)
+//    {
+//        AMQP.BasicProperties properties = new AMQP.BasicProperties.Builder()
+//                .contentType("text/plain")
+////                .headers(headers)
+//                .deliveryMode(2)
+//                .priority(1)
+//                .build();
+//
+//        try
+//        {
+//            transcriptChannel.basicPublish(
+//                    exchangeName,
+//                    routingKey,
+//                    properties,
+//                    transcript.getBytes()
+//            );
+//
+//            logger.debug("Published a transcript.");
+//        }
+//        catch (IOException e)
+//        {
+//            logger.error("Exception converting transcript to bytes", e);
+//        }
+//    }
 
-        try
-        {
-            transcriptChannel.basicPublish(
-                    exchangeName,
-                    routingKey,
-                    properties,
-                    transcript.getBytes()
-            );
-
-            logger.debug("Published a transcript.");
-        }
-        catch (IOException e)
-        {
-            logger.error("Exception converting transcript to bytes", e);
-        }
-    }
-
-    @Override
-    public void notify(TranscriptionResult result)
-    {
-        if (!result.isInterim())
-        {
-            StringBuilder txt = new StringBuilder();
-            result.getAlternatives().forEach(alt -> {
-                txt.append(alt.getTranscription()).append(", ");
-            });
-
-            send(txt.toString());
-        }
-        else
-        {
-            logger.info("Skipping interim transcription result... TODO: save to something!");
-        }
-    }
-
-    @Override
-    public void completed()
-    {
-        logger.info("transcription completed");
-    }
-
-    @Override
-    public void failed(FailureReason reason)
-    {
-        logger.info("transcription failed");
-    }
+//    @Override
+//    public void notify(TranscriptionResult result)
+//    {
+//        if (!result.isInterim())
+//        {
+//            StringBuilder txt = new StringBuilder();
+//            result.getAlternatives().forEach(alt -> {
+//                txt.append(alt.getTranscription()).append(", ");
+//            });
+//
+//            send(txt.toString());
+//        }
+//        else
+//        {
+//            logger.info("Skipping interim transcription result... TODO: save to something!");
+//        }
+//    }
+//    @Override
+//    public void completed()
+//    {
+//        logger.info("transcription completed");
+//    }
+//
+//    @Override
+//    public void failed(FailureReason reason)
+//    {
+//        logger.info("transcription failed");
+//    }
 }
