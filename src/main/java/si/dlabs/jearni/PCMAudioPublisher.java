@@ -37,6 +37,8 @@ public class PCMAudioPublisher
 
     private final AtomicInteger messageCounter = new AtomicInteger(0);
 
+    private final AtomicBoolean shutdownLoop = new AtomicBoolean(false);
+
     public PCMAudioPublisher(Participant participant)
             throws IOException, TimeoutException
     {
@@ -80,18 +82,41 @@ public class PCMAudioPublisher
             {
                 if (!isConfigured.get())
                 {
-                    continue;
+                    if (shutdownLoop.get())
+                    {
+                        logger.info("PCMAudioPublisher loop shutting down.");
+                        break;
+                    }
+                    else
+                    {
+                        continue;
+                    }
                 }
 
-                if (audioBytePipe.available() < nBytesForOneSecond)
+                try
                 {
-                    continue;
+                    if (audioBytePipe.available() < nBytesForOneSecond)
+                    {
+                        if (shutdownLoop.get())
+                        {
+                            logger.info("PCMAudioPublisher loop shutting down.");
+                            break;
+                        }
+                        else
+                        {
+                            continue;
+                        }
+                    }
+
+                    byte[] audioData = new byte[nBytesForOneSecond];
+                    audioBytePipe.read(audioData);
+
+                    publishAudioMessage(audioData);
                 }
-
-                byte[] audioData = new byte[nBytesForOneSecond];
-                audioBytePipe.read(audioData);
-
-                publishAudioMessage(audioData);
+                catch (Exception e)
+                {
+                    logger.error("Error in PCMAudioPublisher", e);
+                }
             }
         });
     }
@@ -123,6 +148,8 @@ public class PCMAudioPublisher
 
     public void end()
     {
+        logger.info("Shutting down PCMAudioPublisher...");
+
         if (pcmAudioChannel != null)
         {
             try
@@ -139,6 +166,11 @@ public class PCMAudioPublisher
             }
         }
 
+        RabbitMQConnectionFactory.releaseConnection();
+
         executor.shutdown();
+        shutdownLoop.set(true);
+
+        logger.info("PCMAudioPublisher set for shutdown.");
     }
 }

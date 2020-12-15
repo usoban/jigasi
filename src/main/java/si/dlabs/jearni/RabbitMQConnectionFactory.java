@@ -11,11 +11,13 @@ import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class RabbitMQConnectionFactory
 {
     private static final ConnectionFactory factory = new ConnectionFactory();
     private static Connection connection;
+    private static AtomicInteger nConnectionUses = new AtomicInteger(0);
     private final static Logger logger = Logger.getLogger(RabbitMQConnectionFactory.class);
 
     public static Connection getConnection()
@@ -48,7 +50,23 @@ public class RabbitMQConnectionFactory
             connection = factory.newConnection();
         }
 
+        nConnectionUses.incrementAndGet();
         return connection;
+    }
+
+    public static void releaseConnection()
+    {
+        int n = nConnectionUses.decrementAndGet();
+
+        if (n == 0 && connection != null)
+        {
+            try {
+                connection.close();
+                connection = null;
+            } catch (IOException e) {
+                logger.error("Error closing MQ connection", e);
+            }
+        }
     }
 
     private static String getHost()
