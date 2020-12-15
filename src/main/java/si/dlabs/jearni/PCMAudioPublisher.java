@@ -88,7 +88,6 @@ public class PCMAudioPublisher
                     continue;
                 }
 
-
                 byte[] audioData = new byte[nBytesForOneSecond];
                 audioBytePipe.read(audioData);
 
@@ -139,5 +138,7 @@ public class PCMAudioPublisher
                 logger.error("Timed out while closing MQ channel", e);
             }
         }
+
+        executor.shutdown();
     }
 }

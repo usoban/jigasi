@@ -262,9 +262,17 @@ public class AmazonTranscriptionService
         @Override
         public void end()
         {
-            // TODO: this is probably wrong? Should we cancel streamTranscriptionFuture?
-            // TODO: cancel executor services!!
+            logger.info("Ending AmazonStreamingRecognitionSession");
+
+            if (streamTranscriptionFuture != null)
+            {
+                streamTranscriptionFuture.cancel(true);
+            }
+
             this.client.close();
+            this.readExecutor.shutdown();
+
+            logger.info("AmazonStreamingRecognitionSession ended.");
         }
 
         @Override
@@ -369,7 +377,13 @@ public class AmazonTranscriptionService
         @Override
         public void cancel()
         {
-            // TODO.
+            logger.info("Canceling audio data subscription.");
+            executor.shutdown();
+
+            if (subscriber != null)
+            {
+                subscriber.onComplete();
+            }
         }
 
         private ByteBuffer getNextAudioChunk()
