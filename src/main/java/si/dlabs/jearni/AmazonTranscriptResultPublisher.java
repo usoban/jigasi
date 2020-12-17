@@ -14,8 +14,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
 
-// TODO: Remove TranscriptionListener interface - or swap with TranscriptionEventListener interface?
-
 public class AmazonTranscriptResultPublisher
 {
     private static final String RAW_TRANSCRIPT_EXCHANGE_NAME = "raw-transcript";
@@ -39,13 +37,9 @@ public class AmazonTranscriptResultPublisher
         {
             configureMq();
         }
-        catch (IOException e)
+        catch (IOException | TimeoutException e)
         {
             logger.error("Error establishing connection to message exchange", e);
-        }
-        catch (TimeoutException e)
-        {
-            logger.error("Timeout establishing connection to message exchange", e);
         }
     }
 
@@ -76,7 +70,7 @@ public class AmazonTranscriptResultPublisher
 
         for (Sentence s : sentences)
         {
-            logger.info("Sentence: " + s.getContent());
+            logger.info("[Participant " + participant.getId() + "] Sentence: " + s.getContent());
             publishSentence(s);
         }
     }
@@ -274,32 +268,23 @@ public class AmazonTranscriptResultPublisher
         return json;
     }
 
-//    @Override
-//    public void notify(TranscriptionResult result)
-//    {
-//        if (!result.isInterim())
-//        {
-//            StringBuilder txt = new StringBuilder();
-//            result.getAlternatives().forEach(alt -> {
-//                txt.append(alt.getTranscription()).append(", ");
-//            });
-//
-//            send(txt.toString());
-//        }
-//        else
-//        {
-//            logger.info("Skipping interim transcription result... TODO: save to something!");
-//        }
-//    }
-//    @Override
-//    public void completed()
-//    {
-//        logger.info("transcription completed");
-//    }
-//
-//    @Override
-//    public void failed(FailureReason reason)
-//    {
-//        logger.info("transcription failed");
-//    }
+    public void end()
+    {
+        if (transcriptChannel != null)
+        {
+            try {
+                transcriptChannel.close();
+            } catch (IOException | TimeoutException e) {
+                logger.error("Error closing AmazonTranscriptResultPublisher's MQ channel.", e);
+            }
+        }
+
+        if (mqConnection != null)
+        {
+            mqConnection = null;
+            RabbitMQConnectionFactory.releaseConnection();
+        }
+
+        logger.info("AmazonTranscriptionResultPublisher for participant [" + participant.getId() + "] ended." );
+    }
 }

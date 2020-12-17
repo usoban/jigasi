@@ -149,11 +149,7 @@ public class AmazonTranscriptionService
 
             logger.info("Audio encoding is " + audioFormat.toString());
 
-            if (
-                    // TODO: only accept LINEAR actually, this PCM_SIGNED is for testing purposes from microphone.
-                    !audioFormat.getEncoding().equals(AudioFormat.LINEAR) &&
-                    !audioFormat.getEncoding().equals("PCM_SIGNED")
-            )
+            if (!audioFormat.getEncoding().equals(AudioFormat.LINEAR))
             {
                 throw new IllegalArgumentException("Audio format encoding not supported: " + audioFormat.toString());
             }
@@ -181,7 +177,10 @@ public class AmazonTranscriptionService
             return (TranscriptResultStream e) -> {
                 TranscriptEvent event = (TranscriptEvent) e;
 
-                logger.info(event.toString());
+                if (logger.isDebugEnabled())
+                {
+                    logger.debug(event.toString());
+                }
 
                 if (event.transcript().results().size() < 1)
                 {
@@ -271,6 +270,7 @@ public class AmazonTranscriptionService
 
             this.client.close();
             this.readExecutor.shutdown();
+            this.resultPublisher.end();
 
             logger.info("AmazonStreamingRecognitionSession ended.");
         }
