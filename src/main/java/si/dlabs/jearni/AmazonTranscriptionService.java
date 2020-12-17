@@ -161,6 +161,7 @@ public class AmazonTranscriptionService
                     .mediaEncoding(MediaEncoding.PCM)
                     .languageCode(LanguageCode.EN_US)
                     .mediaSampleRateHertz(sampleRateInHertz)
+                    .vocabularyName("filler-words-v0")
                     .build();
         }
 
