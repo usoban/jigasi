@@ -99,7 +99,7 @@ public class TranscriptionGateway
             }
             catch(Exception e)
             {
-                logger.error("Cannot instantiate custom transcription service");
+                logger.error("Cannot instantiate custom transcription service", e);
             }
         }
 

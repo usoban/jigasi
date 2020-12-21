@@ -5,7 +5,7 @@
 #export DEB_VERBOSE_ALL=true
 
 # Disable debug package
-DEB_BUILD_OPTIONS=noddebs
+DEB_BUILD_OPTIONS=noddebs nostrip
 
 %:
 	dh $@

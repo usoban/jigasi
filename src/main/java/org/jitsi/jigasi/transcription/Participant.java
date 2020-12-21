@@ -23,8 +23,10 @@ import org.jitsi.jigasi.util.Util;
 import org.jitsi.xmpp.extensions.jitsimeet.*;
 import org.jitsi.utils.logging.*;
 import org.jivesoftware.smack.packet.*;
-
+import si.dlabs.jearni.PCMAudioPublisher;
 import javax.media.format.*;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.*;
 import java.util.*;
 import java.util.concurrent.*;
@@ -66,7 +68,7 @@ public class Participant
     /**
      * Whether we should buffer locally before sending
      */
-    private static final boolean USE_LOCAL_BUFFER = true;
+    private static final boolean USE_LOCAL_BUFFER = false;
 
     /**
      * The string to use when a participant's name is unknown.
@@ -153,12 +155,17 @@ public class Participant
     private SilenceFilter silenceFilter = null;
 
     /**
+     * Publisher of PCM audio.
+     */
+    private PCMAudioPublisher audioPublisher;
+
+    /**
      * Create a participant with a given name and audio stream
      *
      * @param transcriber the transcriber which created this participant
      * @param identifier the string which is used to identify this participant
      */
-    Participant(Transcriber transcriber, String identifier)
+    public Participant(Transcriber transcriber, String identifier)
     {
         this(transcriber, identifier, false);
     }
@@ -173,6 +180,19 @@ public class Participant
     {
         this.transcriber = transcriber;
         this.identifier = identifier;
+
+        try
+        {
+            audioPublisher = new PCMAudioPublisher(this);
+        }
+        catch (IOException e)
+        {
+            throw new UncheckedIOException(e);
+        }
+        catch (TimeoutException e)
+        {
+            logger.error("Something timed out", e);
+        }
 
         if(filterAudio)
         {
@@ -540,6 +560,11 @@ public class Participant
         {
             session.end();
         }
+
+        if (audioPublisher != null)
+        {
+            audioPublisher.end();
+        }
     }
 
     /**
@@ -560,9 +585,32 @@ public class Participant
         if (audioFormat == null)
         {
             audioFormat = (AudioFormat) buffer.getFormat();
+
+            if (audioPublisher != null)
+            {
+                try
+                {
+                    audioPublisher.configureAudioFormat(audioFormat);
+                }
+                catch (IOException e)
+                {
+                    throw new UncheckedIOException(e);
+                }
+            }
         }
 
         byte[] audio = (byte[]) buffer.getData();
+
+        if (audioPublisher != null)
+        {
+            try
+            {
+                audioPublisher.buffer(audio);
+            } catch (IOException e)
+            {
+                throw new UncheckedIOException(e);
+            }
+        }
 
         if (USE_LOCAL_BUFFER)
         {
