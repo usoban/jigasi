@@ -81,9 +81,11 @@ public class AmazonTranscriptResultPublisher
         Sentence currentSentence = null;
 
         List<Item> items = transcriptAlternative.items();
-
+        Item lastItem = null;
         for (Item item : items)
         {
+            lastItem = item;
+
             if (currentSentence == null)
             {
                 currentSentence = new Sentence(item.startTime());
@@ -128,9 +130,10 @@ public class AmazonTranscriptResultPublisher
             }
         }
 
-        if (currentSentence != null && currentSentence.isEmpty())
+        if (currentSentence != null && !currentSentence.isEmpty())
         {
             // Could it happen that alternative ends without a punctuation?
+            currentSentence.finish(Sentence.SentenceType.NON_QUESTION, lastItem.endTime());
             sentences.add(currentSentence);
             logger.warn("Transcript alternative ended without a punctuation; still adding to list of sentences.");
         }
