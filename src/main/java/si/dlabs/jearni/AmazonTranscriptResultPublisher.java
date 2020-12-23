@@ -12,6 +12,7 @@ import software.amazon.awssdk.services.transcribestreaming.model.TranscriptEvent
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
+import java.time.Instant;
 import java.util.concurrent.TimeoutException;
 
 public class AmazonTranscriptResultPublisher
@@ -29,8 +30,11 @@ public class AmazonTranscriptResultPublisher
 
     private Channel transcriptChannel;
 
+    private final Instant sessionStartDateTime;
+
     public AmazonTranscriptResultPublisher(Participant participant)
     {
+        this.sessionStartDateTime = Instant.now();
         this.participant = participant;
 
         try
@@ -146,10 +150,15 @@ public class AmazonTranscriptResultPublisher
         String conferenceId = Utils.getCleanRoomName(participant);
         JSONObject json = new JSONObject();
 
+        Instant absoluteStartTime = sessionStartDateTime.plusMillis((long) (sentence.getStartTime()*1000));
+        Instant absoluteEndTime = sessionStartDateTime.plusMillis((long) (sentence.getEndTime()*1000));
+
         json.put("conversation_id", conferenceId);
         json.put("speaker_id", participant.getId());
         json.put("start_time", sentence.getStartTime());
         json.put("end_time", sentence.getEndTime());
+        json.put("start_time_utc", absoluteStartTime.toString());
+        json.put("end_time_utc", absoluteEndTime.toString());
         json.put("text", sentence.getContent());
         json.put("word_count", sentence.getWordCount());
         json.put("sentence_type", sentence.getTypeString());
