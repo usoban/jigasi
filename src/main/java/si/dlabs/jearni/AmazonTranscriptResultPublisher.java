@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
 import java.time.Instant;
+import java.util.UUID;
 import java.util.concurrent.TimeoutException;
 
 public class AmazonTranscriptResultPublisher
@@ -155,6 +156,7 @@ public class AmazonTranscriptResultPublisher
 
         json.put("conversation_id", conferenceId);
         json.put("speaker_id", participant.getId());
+        json.put("sentence_id", UUID.randomUUID());
         json.put("start_time", sentence.getStartTime());
         json.put("end_time", sentence.getEndTime());
         json.put("start_time_utc", absoluteStartTime.toString());
