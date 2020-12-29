@@ -22,6 +22,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
@@ -129,7 +130,7 @@ public class AmazonTranscriptionService
         private UUID messageId;
         private Participant participant;
         private AmazonTranscriptResultPublisher resultPublisher;
-
+        private final AtomicBoolean isSessionActive = new AtomicBoolean(true);
         private ExecutorService readExecutor = Executors.newSingleThreadExecutor();
 
         public AmazonStreamingRecognitionSession(Participant participant, TranscribeStreamingAsyncClient client)
@@ -140,7 +141,7 @@ public class AmazonTranscriptionService
 
             resultPublisher = new AmazonTranscriptResultPublisher(participant);
 
-            logger.info("Amazon streaming recognition session initialized.");
+            logger.info("Amazon streaming recognition session initialized for participant " + participant.getId());
         }
 
         protected StartStreamTranscriptionRequest buildStreamingRequest(TranscriptionRequest request)
@@ -231,11 +232,11 @@ public class AmazonTranscriptionService
             StartStreamTranscriptionResponseHandler responseHandler = buildStreamingResponseHandler();
             audioPublisher = new AmazonAudioStreamPublisher();
 
-            logger.info("Starting stream transcription.....");
+            logger.info("Starting streaming transcription for participant " + participant.getId());
 
             streamTranscriptionFuture = client.startStreamTranscription(request, audioPublisher, responseHandler);
 
-            logger.info("Stream transcription started.");
+            logger.info("Streaming transcription started for participant " + participant.getId());
         }
 
         @Override
@@ -251,7 +252,7 @@ public class AmazonTranscriptionService
                     }
                     catch (IOException e)
                     {
-                        logger.error("Error starting streaming request", e);
+                        logger.error("Error starting streaming request for participant " + participant.getId(), e);
                     }
                 }
 
@@ -262,7 +263,8 @@ public class AmazonTranscriptionService
         @Override
         public void end()
         {
-            logger.info("Ending AmazonStreamingRecognitionSession");
+            logger.info("Ending AmazonStreamingRecognitionSession for participant " + participant.getId());
+            isSessionActive.set(false);
 
             if (streamTranscriptionFuture != null)
             {
@@ -273,13 +275,13 @@ public class AmazonTranscriptionService
             this.readExecutor.shutdown();
             this.resultPublisher.end();
 
-            logger.info("AmazonStreamingRecognitionSession ended.");
+            logger.info("AmazonStreamingRecognitionSession ended for participant " + participant.getId());
         }
 
         @Override
         public boolean ended()
         {
-            return streamTranscriptionFuture != null && streamTranscriptionFuture.isDone();
+            return isSessionActive.get();
         }
 
         @Override
