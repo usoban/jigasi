@@ -281,7 +281,7 @@ public class AmazonTranscriptionService
         @Override
         public boolean ended()
         {
-            return isSessionActive.get();
+            return !isSessionActive.get();
         }
 
         @Override
