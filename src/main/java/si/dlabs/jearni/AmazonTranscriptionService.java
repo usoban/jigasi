@@ -402,6 +402,7 @@ public class AmazonTranscriptionService
                 if (len <= 0)
                 {
                     audioBuffer = ByteBuffer.allocate(0);
+                    logger.info("No audio data, allocating buffer size of 0.");
                 }
                 else
                 {
