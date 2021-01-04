@@ -3,6 +3,7 @@ package si.dlabs.jearni;
 import javax.media.format.AudioFormat;
 import javax.sound.sampled.TargetDataLine;
 import javax.sound.sampled.AudioInputStream;
+import org.jitsi.jigasi.transcription.Participant;
 import org.jitsi.jigasi.transcription.TranscriptionRequest;
 import org.jitsi.jigasi.transcription.TranscriptionService;
 import java.io.IOException;
@@ -16,9 +17,10 @@ import java.util.concurrent.Executors;
 public class TranscribeTest {
     public static void main(String[] args) throws Exception
     {
+        Participant participant = new Participant(null, "urban-test");
         AmazonTranscriptionService transcriptionService = new AmazonTranscriptionService();
-        AmazonTranscriptResultPublisher s3TranscriptPublisher = new AmazonTranscriptResultPublisher(null);
-        TranscriptionService.StreamingRecognitionSession session = transcriptionService.initStreamingSession(null);
+//        AmazonTranscriptResultPublisher s3TranscriptPublisher = new AmazonTranscriptResultPublisher(null);
+        TranscriptionService.StreamingRecognitionSession session = transcriptionService.initStreamingSession(participant);
 
         TargetDataLine mic = Microphone.get();
         mic.start();

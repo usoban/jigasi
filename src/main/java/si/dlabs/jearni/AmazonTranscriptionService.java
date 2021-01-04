@@ -131,7 +131,7 @@ public class AmazonTranscriptionService
         private Participant participant;
         private AmazonTranscriptResultPublisher resultPublisher;
         private final AtomicBoolean isSessionActive = new AtomicBoolean(true);
-        private ExecutorService readExecutor = Executors.newSingleThreadExecutor();
+        private final AtomicBoolean isTranscriptionStreamingRequestRunning = new AtomicBoolean(false);
 
         public AmazonStreamingRecognitionSession(Participant participant, TranscribeStreamingAsyncClient client)
         {
@@ -150,7 +150,10 @@ public class AmazonTranscriptionService
 
             logger.info("Audio encoding is " + audioFormat.toString());
 
-            if (!audioFormat.getEncoding().equals(AudioFormat.LINEAR))
+            if (
+                    !audioFormat.getEncoding().equals(AudioFormat.LINEAR) &&
+                    !audioFormat.getEncoding().equals("PCM_SIGNED") // Mic testing
+            )
             {
                 throw new IllegalArgumentException("Audio format encoding not supported: " + audioFormat.toString());
             }
@@ -168,8 +171,18 @@ public class AmazonTranscriptionService
 
         protected StartStreamTranscriptionResponseHandler buildStreamingResponseHandler()
         {
-            return StartStreamTranscriptionResponseHandler
-                    .builder()
+            return StartStreamTranscriptionResponseHandler.builder()
+                    .onResponse(r -> {
+                        logger.info("Received intial response");
+                        logger.info(r);
+                    })
+                    .onError(e -> {
+                        logger.error("ResponseHandler error occured", e);
+                        isTranscriptionStreamingRequestRunning.set(false);
+                    })
+                    .onComplete(() -> {
+                        logger.info("=== All records streamed successfully ===");
+                    })
                     .subscriber(buildResponseHandler())
                     .build();
         }
@@ -218,23 +231,35 @@ public class AmazonTranscriptionService
             };
         }
 
-        protected void startStreamingRequest(TranscriptionRequest transcriptionRequest) throws IOException
+        protected synchronized void startStreamingRequest(TranscriptionRequest transcriptionRequest) throws IOException
         {
-            // Set up buffers and the publisher.
-            AudioFormat audioFormat = transcriptionRequest.getFormat();
-            int samplesPerMs = new Double(audioFormat.getSampleRate() / 1000.0).intValue(); // number of samples per millisecond.
-            int bytesPerSample = audioFormat.getSampleSizeInBits() / 8;
-            bufferSize = bufferSizeMilliseconds * samplesPerMs * bytesPerSample;
+            boolean isRunning = isTranscriptionStreamingRequestRunning.getAndSet(true);
+            if (isRunning)
+            {
+                return;
+            }
 
-            logger.info("Buffer size for " + bufferSizeMilliseconds + "ms is " + bufferSize + " bytes.");
+            if (audioPublisher == null)
+            {
+                // Set up buffers and the publisher.
+                AudioFormat audioFormat = transcriptionRequest.getFormat();
+                int samplesPerMs = new Double(audioFormat.getSampleRate() / 1000.0).intValue(); // number of samples per millisecond.
+                int bytesPerSample = audioFormat.getSampleSizeInBits() / 8;
+                bufferSize = bufferSizeMilliseconds * samplesPerMs * bytesPerSample;
+
+                logger.info("Buffer size for " + bufferSizeMilliseconds + "ms is " + bufferSize + " bytes.");
+
+                audioPublisher = new AmazonAudioStreamPublisher(bufferSize);
+            }
 
             StartStreamTranscriptionRequest request = buildStreamingRequest(transcriptionRequest);
             StartStreamTranscriptionResponseHandler responseHandler = buildStreamingResponseHandler();
-            audioPublisher = new AmazonAudioStreamPublisher();
+
 
             logger.info("Starting streaming transcription for participant " + participant.getId());
 
             streamTranscriptionFuture = client.startStreamTranscription(request, audioPublisher, responseHandler);
+            isTranscriptionStreamingRequestRunning.set(true);
 
             logger.info("Streaming transcription started for participant " + participant.getId());
         }
@@ -242,22 +267,20 @@ public class AmazonTranscriptionService
         @Override
         public void sendRequest(TranscriptionRequest request)
         {
-            readExecutor.submit(() -> {
-                // TODO: please use some fuckin flag in this place instead of state variable :<
-                if (streamTranscriptionFuture == null)
+            if (!isTranscriptionStreamingRequestRunning.get())
+            {
+                try
                 {
-                    try
-                    {
-                        startStreamingRequest(request);
-                    }
-                    catch (IOException e)
-                    {
-                        logger.error("Error starting streaming request for participant " + participant.getId(), e);
-                    }
+                    startStreamingRequest(request);
                 }
+                catch (IOException e)
+                {
+                    logger.error("Error starting streaming request for participant " + participant.getId(), e);
+                }
+            }
 
-                audioPublisher.pushAudioBytes(request.getAudio());
-            });
+
+            audioPublisher.pushAudioBytes(request.getAudio());
         }
 
         @Override
@@ -266,13 +289,12 @@ public class AmazonTranscriptionService
             logger.info("Ending AmazonStreamingRecognitionSession for participant " + participant.getId());
             isSessionActive.set(false);
 
-            if (streamTranscriptionFuture != null)
+            if (isTranscriptionStreamingRequestRunning.get() && streamTranscriptionFuture != null)
             {
                 streamTranscriptionFuture.cancel(true);
             }
 
             this.client.close();
-            this.readExecutor.shutdown();
             this.resultPublisher.end();
 
             logger.info("AmazonStreamingRecognitionSession ended for participant " + participant.getId());
@@ -298,7 +320,7 @@ public class AmazonTranscriptionService
     {
         private final BytePipe bytePipe;
 
-        public AmazonAudioStreamPublisher()
+        public AmazonAudioStreamPublisher(int bufferSize)
                 throws IOException
         {
             bytePipe = new BytePipe(bufferSize * 100);
