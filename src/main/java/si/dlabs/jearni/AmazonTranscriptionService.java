@@ -340,7 +340,7 @@ public class AmazonTranscriptionService
             }
             catch (IOException e)
             {
-                logger.error("Error pushing audio bytes to BytePipe", e);
+                logger.error("Error pushing audio bytes to BytePipe.");
             }
         }
     }
