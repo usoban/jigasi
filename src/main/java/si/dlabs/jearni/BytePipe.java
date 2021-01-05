@@ -4,10 +4,18 @@ import java.io.*;
 
 public class BytePipe
 {
-    private final PipedInputStream inputPipe;
-    private final PipedOutputStream outputPipe;
+    private int bufferSize;
+    private PipedInputStream inputPipe;
+    private PipedOutputStream outputPipe;
 
     public BytePipe(int bufferSize) throws IOException
+    {
+        this.bufferSize = bufferSize;
+        reset();
+    }
+
+    public void reset()
+            throws IOException
     {
         inputPipe = new PipedInputStream(bufferSize);
         outputPipe = new PipedOutputStream(inputPipe);

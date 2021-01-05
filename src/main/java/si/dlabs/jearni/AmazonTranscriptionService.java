@@ -173,15 +173,16 @@ public class AmazonTranscriptionService
         {
             return StartStreamTranscriptionResponseHandler.builder()
                     .onResponse(r -> {
-                        logger.info("Received intial response");
+                        logger.info("Received intial response for participant " + participant.getId());
                         logger.info(r);
                     })
                     .onError(e -> {
-                        logger.error("ResponseHandler error occured", e);
+                        logger.error("ResponseHandler error occured for participant " + participant.getId(), e);
                         isTranscriptionStreamingRequestRunning.set(false);
                     })
                     .onComplete(() -> {
-                        logger.info("=== All records streamed successfully ===");
+                        logger.info("All records streamed successfully for participant " + participant.getId());
+                        isTranscriptionStreamingRequestRunning.set(false);
                     })
                     .subscriber(buildResponseHandler())
                     .build();
@@ -323,7 +324,7 @@ public class AmazonTranscriptionService
         public AmazonAudioStreamPublisher(int bufferSize)
                 throws IOException
         {
-            bytePipe = new BytePipe(bufferSize * 100);
+            bytePipe = new BytePipe(bufferSize);
         }
 
         @Override
@@ -340,7 +341,7 @@ public class AmazonTranscriptionService
             }
             catch (IOException e)
             {
-                logger.error("Error pushing audio bytes to BytePipe.");
+                logger.error("Error pushing bytes", e);
             }
         }
     }
@@ -403,7 +404,17 @@ public class AmazonTranscriptionService
         public void cancel()
         {
             logger.info("Canceling audio data subscription.");
-            executor.shutdown();
+            executor.shutdownNow();
+
+            try
+            {
+                bytePipe.reset();
+            }
+            catch (IOException e)
+            {
+                logger.error("Error resetting byte-pipe", e);
+            }
+
 
             if (subscriber != null)
             {
@@ -413,25 +424,17 @@ public class AmazonTranscriptionService
 
         private ByteBuffer getNextAudioChunk()
         {
-            ByteBuffer audioBuffer;
-            byte[] audioBytes = new byte[bufferSize];
-            int len;
-
             try
             {
-                len = bytePipe.read(audioBytes);
+                byte[] audioBytes = new byte[bufferSize];
+                int len = bytePipe.read(audioBytes);
 
-                if (len <= 0)
+                if (len == 0)
                 {
-                    audioBuffer = ByteBuffer.allocate(0);
-                    logger.info("No audio data, allocating buffer size of 0.");
-                }
-                else
-                {
-                    audioBuffer = ByteBuffer.wrap(audioBytes, 0, len);
+                    return ByteBuffer.allocate(0);
                 }
 
-                return audioBuffer;
+                return ByteBuffer.wrap(audioBytes, 0, len);
             }
             catch (IOException e)
             {
