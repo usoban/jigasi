@@ -73,10 +73,11 @@ public class AmazonTranscriptResultPublisher
 
         List<Sentence> sentences = breakAlternativeIntoSentences(firstAlternative);
 
+        UUID transcriptId = UUID.randomUUID();
         for (Sentence s : sentences)
         {
             logger.info("[Participant " + participant.getId() + "] Sentence: " + s.getContent());
-            publishSentence(s);
+            publishSentence(s, transcriptId);
         }
     }
 
@@ -146,7 +147,7 @@ public class AmazonTranscriptResultPublisher
         return sentences;
     }
 
-    private void publishSentence(Sentence sentence)
+    private void publishSentence(Sentence sentence, UUID transcriptId)
     {
         String conferenceId = Utils.getCleanRoomName(participant);
         JSONObject json = new JSONObject();
@@ -161,6 +162,7 @@ public class AmazonTranscriptResultPublisher
         json.put("end_time", sentence.getEndTime());
         json.put("start_time_utc", absoluteStartTime.toString());
         json.put("end_time_utc", absoluteEndTime.toString());
+        json.put("transcript_id", transcriptId);
         json.put("text", sentence.getContent());
         json.put("word_count", sentence.getWordCount());
         json.put("sentence_type", sentence.getTypeString());

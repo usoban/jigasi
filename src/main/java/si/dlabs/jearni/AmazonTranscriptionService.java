@@ -98,7 +98,6 @@ public class AmazonTranscriptionService
     public void sendSingleRequest(TranscriptionRequest request, Consumer<TranscriptionResult> resultConsumer)
             throws UnsupportedOperationException
     {
-        // TODO
         logger.error("sendSingleRequest is not yet implemented.");
     }
 
