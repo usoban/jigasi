@@ -669,27 +669,27 @@ public class Participant
         transcriber.executorService.submit(() ->
            {
                byte[] toBuffer;
-               if(silenceFilter != null)
-               {
-                   silenceFilter.giveSegment(audio);
-                   if(silenceFilter.shouldFilter())
-                   {
-                       return;
-                   }
-                   else if(silenceFilter.newSpeech())
-                   {
-                       buffer.clear();
-                       toBuffer = silenceFilter.getSpeechWindow();
-                   }
-                   else
-                   {
-                       toBuffer = audio;
-                   }
-               }
-               else
-               {
+//               if(silenceFilter != null)
+//               {
+//                   silenceFilter.giveSegment(audio);
+//                   if(silenceFilter.shouldFilter())
+//                   {
+//                       return;
+//                   }
+//                   else if(silenceFilter.newSpeech())
+//                   {
+//                       buffer.clear();
+//                       toBuffer = silenceFilter.getSpeechWindow();
+//                   }
+//                   else
+//                   {
+//                       toBuffer = audio;
+//                   }
+//               }
+//               else
+//               {
                    toBuffer = audio;
-               }
+//               }
 
                try
                {
