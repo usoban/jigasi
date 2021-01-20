@@ -663,6 +663,9 @@ public class Transcriber
 
         long ssrc = receiveStream.getSSRC() & 0xffffffffL;
 
+        logger.info("packet count: " + receiveStream.getSenderReport().getSenderPacketCount());
+        logger.info("timestamp: " + receiveStream.getSenderReport().getRTPTimeStamp());
+
         Participant p = findParticipant(ssrc);
 
         if (p != null)

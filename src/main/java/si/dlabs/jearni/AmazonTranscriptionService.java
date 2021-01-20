@@ -402,14 +402,14 @@ public class AmazonTranscriptionService
                         {
                             AudioEvent audioEvent = audioEventFromBuffer(audioBuffer);
 
-                            Instant now = Instant.now();
-                            if (lastAudioPacketSentAt != null)
-                            {
-                                Duration delta = Duration.between(lastAudioPacketSentAt, now);
-                                logger.info("Audio packet delta: " + delta.getSeconds() + "s, " + delta.getNano() + "ns");
-                            }
-
-                            lastAudioPacketSentAt = now;
+//                            Instant now = Instant.now();
+//                            if (lastAudioPacketSentAt != null)
+//                            {
+//                                Duration delta = Duration.between(lastAudioPacketSentAt, now);
+//                                logger.info("Audio packet delta: " + delta.getSeconds() + "s, " + delta.getNano() + "ns");
+//                            }
+//
+//                            lastAudioPacketSentAt = now;
 
                             subscriber.onNext(audioEvent);
                         }
