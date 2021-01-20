@@ -16,6 +16,8 @@ import javax.media.format.AudioFormat;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
@@ -371,6 +373,7 @@ public class AmazonTranscriptionService
         private final ExecutorService executor = Executors.newSingleThreadExecutor();
         private final AtomicLong demand = new AtomicLong(0);
         private final BytePipe bytePipe;
+        private Instant lastAudioPacketSentAt;
 
         public SubscriptionImpl(Subscriber<? super AudioStream> subscriber, BytePipe bytePipe)
         {
@@ -398,6 +401,12 @@ public class AmazonTranscriptionService
                         if (audioBuffer.remaining() > 0)
                         {
                             AudioEvent audioEvent = audioEventFromBuffer(audioBuffer);
+
+                            Instant now = Instant.now();
+                            Duration delta = Duration.between(lastAudioPacketSentAt, now);
+                            logger.info("Audio packet delta: " + delta.getSeconds() + "s, " + delta.getNano() + "ns");
+                            lastAudioPacketSentAt = now;
+
                             subscriber.onNext(audioEvent);
                         }
                         else
