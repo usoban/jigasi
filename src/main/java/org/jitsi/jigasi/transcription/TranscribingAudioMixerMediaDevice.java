@@ -39,7 +39,7 @@ public class TranscribingAudioMixerMediaDevice
     public TranscribingAudioMixerMediaDevice(
         ReceiveStreamBufferListener listener)
     {
-        super(new AudioSilenceMediaDevice());
+        super(new AudioSilenceMediaDevice(false));
         super.setReceiveStreamBufferListener(listener);
     }
 
