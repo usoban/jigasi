@@ -175,7 +175,7 @@ public class AmazonTranscriptionService
                     .mediaEncoding(MediaEncoding.PCM)
                     .languageCode(transcribeLanguage)
                     .mediaSampleRateHertz(sampleRateInHertz)
-                    .vocabularyName("filler-words-v0")
+                    .vocabularyName("filler-words-" + transcribeLanguage)
                     .build();
         }
 
