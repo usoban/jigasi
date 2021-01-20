@@ -32,10 +32,8 @@ public class AmazonTranscriptionService
     private static String PROP_BUFFER_MILLISECONDS = "org.jitsi.jigasi.transcription.AMAZON_BUFFER_MILLISECONDS";
     private static int PROP_BUFFER_MILLISECONDS_DEFAULT = 500;
 
-//    public final static String[] SUPPORTED_LANGUAGE_TAGS = new String[] {
-//            LanguageCode.EN_US.toString(),
-//            LanguageCode.EN_GB.toString()
-//    };
+    private static String PROP_TRANSCRIPTION_LANGUAGE = "org.jitsi.jigasi.transcription.AMAZON_TRANSCRIBE_LANGUAGE";
+    private static String PROP_TRANSCRIPTION_LANGUAGE_DEFAULT = LanguageCode.EN_US.toString();
 
     /**
      * Logger instance.
@@ -58,6 +56,11 @@ public class AmazonTranscriptionService
      */
     private int bufferSize;
 
+    /**
+     * The language code used for Amazon's Transcribe.
+     */
+    private String transcribeLanguage;
+
     @SuppressWarnings("WeakerAccess")
     public AmazonTranscriptionService()
     {
@@ -79,10 +82,16 @@ public class AmazonTranscriptionService
                     PROP_BUFFER_MILLISECONDS,
                     PROP_BUFFER_MILLISECONDS_DEFAULT
             );
+
+            transcribeLanguage = configurationService.getString(
+                    PROP_TRANSCRIPTION_LANGUAGE,
+                    PROP_TRANSCRIPTION_LANGUAGE_DEFAULT
+            );
         }
         else
         {
             bufferSizeMilliseconds = PROP_BUFFER_MILLISECONDS_DEFAULT;
+            transcribeLanguage = PROP_TRANSCRIPTION_LANGUAGE_DEFAULT;
         }
 
         logger.info("Amazon Transcribe buffer = " + bufferSizeMilliseconds + "ms.");
@@ -159,10 +168,12 @@ public class AmazonTranscriptionService
 
             int sampleRateInHertz = Double.valueOf(audioFormat.getSampleRate()).intValue();
 
+            logger.info("Language configured for transcription: " + transcribeLanguage);
+
             return StartStreamTranscriptionRequest
                     .builder()
                     .mediaEncoding(MediaEncoding.PCM)
-                    .languageCode(LanguageCode.EN_US)
+                    .languageCode(transcribeLanguage)
                     .mediaSampleRateHertz(sampleRateInHertz)
                     .vocabularyName("filler-words-v0")
                     .build();
@@ -219,7 +230,7 @@ public class AmazonTranscriptionService
                         null,
                         messageId,
                         firstResult.isPartial(),
-                        "en_US",
+                        transcribeLanguage,
                         1.0,
                         transcriptionAlternative
                 );
