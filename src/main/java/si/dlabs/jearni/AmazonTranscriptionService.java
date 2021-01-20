@@ -176,13 +176,13 @@ public class AmazonTranscriptionService
                     StartStreamTranscriptionRequest
                     .builder()
                     .mediaEncoding(MediaEncoding.PCM)
-                    .languageCode(transcribeLanguage)
+                    .languageCode(LanguageCode.EN_US)
                     .mediaSampleRateHertz(sampleRateInHertz);
 
-            if (transcribeLanguage.equals(PROP_TRANSCRIPTION_LANGUAGE_DEFAULT))
-            {
-                builder.vocabularyName("filler-words-"+transcribeLanguage);
-            }
+//            if (transcribeLanguage.equals(PROP_TRANSCRIPTION_LANGUAGE_DEFAULT))
+//            {
+//                builder.vocabularyName("filler-words-"+transcribeLanguage);
+//            }
 
             return builder.build();
         }
