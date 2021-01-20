@@ -170,13 +170,19 @@ public class AmazonTranscriptionService
 
             logger.info("Language configured for transcription: " + transcribeLanguage);
 
-            return StartStreamTranscriptionRequest
+            StartStreamTranscriptionRequest.Builder builder =
+                    StartStreamTranscriptionRequest
                     .builder()
                     .mediaEncoding(MediaEncoding.PCM)
                     .languageCode(transcribeLanguage)
-                    .mediaSampleRateHertz(sampleRateInHertz)
-                    .vocabularyName("filler-words-" + transcribeLanguage)
-                    .build();
+                    .mediaSampleRateHertz(sampleRateInHertz);
+
+            if (transcribeLanguage.equals(PROP_TRANSCRIPTION_LANGUAGE_DEFAULT))
+            {
+                builder.vocabularyName("filler-words-"+transcribeLanguage);
+            }
+
+            return builder.build();
         }
 
         protected StartStreamTranscriptionResponseHandler buildStreamingResponseHandler()
