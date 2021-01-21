@@ -401,7 +401,7 @@ public class AmazonTranscriptionService
         private final BytePipe bytePipe;
 
         private Instant lastAudioPacketSentAt;
-        private Duration mutedDuration;
+        private Duration mutedDuration = Duration.ofSeconds(0, 0);
 
         public SubscriptionImpl(Subscriber<? super AudioStream> subscriber, BytePipe bytePipe)
         {
