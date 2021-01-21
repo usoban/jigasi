@@ -23,6 +23,8 @@ import org.jitsi.impl.neomedia.device.*;
 import org.jitsi.jigasi.*;
 import org.jitsi.jigasi.transcription.action.*;
 import org.jitsi.utils.logging.*;
+import si.dlabs.jearni.CallClock;
+import si.dlabs.jearni.Utils;
 
 import javax.media.Buffer;
 import javax.media.rtp.*;
@@ -436,6 +438,7 @@ public class Transcriber
             updateDDClient(DD_ASPECT_START);
 
             this.state = State.TRANSCRIBING;
+            CallClock.startCall(Utils.getCleanRoomName(this));
             this.executorService = Executors.newSingleThreadExecutor();
 
             TranscriptEvent event
@@ -486,6 +489,8 @@ public class Transcriber
                     listener.failed(reason);
                 }
             }
+
+            CallClock.endCall(Utils.getCleanRoomName(this));
         }
         else
         {

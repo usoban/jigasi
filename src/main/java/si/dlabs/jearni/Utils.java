@@ -13,6 +13,11 @@ public class Utils
             return "noroom";
         }
 
+        return getCleanRoomName(transcriber);
+    }
+
+    public static String getCleanRoomName(Transcriber transcriber)
+    {
         String roomName = transcriber.getRoomName();
         int atSignIdx = roomName.indexOf('@');
 

@@ -143,6 +143,11 @@ public class AmazonTranscriptionService
         private final AtomicBoolean isSessionActive = new AtomicBoolean(true);
         private final AtomicBoolean isTranscriptionStreamingRequestRunning = new AtomicBoolean(false);
 
+        /**
+         * The instant when we received Amazon's response that the recognition session has started.
+         */
+        private Instant recognitionSessionStartDatetime;
+
         public AmazonStreamingRecognitionSession(Participant participant, TranscribeStreamingAsyncClient client)
         {
             this.participant = participant;
@@ -176,13 +181,13 @@ public class AmazonTranscriptionService
                     StartStreamTranscriptionRequest
                     .builder()
                     .mediaEncoding(MediaEncoding.PCM)
-                    .languageCode(LanguageCode.EN_US)
+                    .languageCode(transcribeLanguage)
                     .mediaSampleRateHertz(sampleRateInHertz);
 
-//            if (transcribeLanguage.equals(PROP_TRANSCRIPTION_LANGUAGE_DEFAULT))
-//            {
-//                builder.vocabularyName("filler-words-"+transcribeLanguage);
-//            }
+            if (transcribeLanguage.equals(PROP_TRANSCRIPTION_LANGUAGE_DEFAULT))
+            {
+                builder.vocabularyName("filler-words-"+transcribeLanguage);
+            }
 
             return builder.build();
         }
@@ -191,6 +196,7 @@ public class AmazonTranscriptionService
         {
             return StartStreamTranscriptionResponseHandler.builder()
                     .onResponse(r -> {
+                        recognitionSessionStartDatetime = Instant.now();
                         logger.info("Received intial response for participant " + participant.getId());
                         logger.info(r);
                     })
@@ -221,32 +227,46 @@ public class AmazonTranscriptionService
                     return;
                 }
 
-                resultPublisher.publish(event);
-
-                Result firstResult = event.transcript().results().get(0);
-
-                if (firstResult.alternatives().size() < 1)
-                {
-                    logger.warn("Transcription result has no alternatives?");
-                }
-
-                Alternative firstAlternative = firstResult.alternatives().get(0);
-                TranscriptionAlternative transcriptionAlternative = new TranscriptionAlternative(
-                        firstAlternative.transcript()
-                );
-                TranscriptionResult transcriptionResult = new TranscriptionResult(
-                        null,
-                        messageId,
-                        firstResult.isPartial(),
-                        transcribeLanguage,
-                        1.0,
-                        transcriptionAlternative
+                String conferenceId = Utils.getCleanRoomName(participant);
+                TranscriptResult adjustedTranscriptResult = CallClock.adjustRelativeToStartOfCall(
+                        conferenceId,
+                        event,
+                        recognitionSessionStartDatetime,
+                        audioPublisher.getCurrentSubscriptionMutedDuration()
                 );
 
-                for (TranscriptionListener listener : transcriptionListeners)
+                if (adjustedTranscriptResult == null)
                 {
-                    listener.notify(transcriptionResult);
+                    return;
                 }
+
+                // TODO: .....
+                resultPublisher.publish(event, adjustedTranscriptResult);
+
+//                Result firstResult = event.transcript().results().get(0);
+//
+//                if (firstResult.alternatives().size() < 1)
+//                {
+//                    logger.warn("Transcription result has no alternatives?");
+//                }
+//
+//                Alternative firstAlternative = firstResult.alternatives().get(0);
+//                TranscriptionAlternative transcriptionAlternative = new TranscriptionAlternative(
+//                        firstAlternative.transcript()
+//                );
+//                TranscriptionResult transcriptionResult = new TranscriptionResult(
+//                        null,
+//                        messageId,
+//                        firstResult.isPartial(),
+//                        transcribeLanguage,
+//                        1.0,
+//                        transcriptionAlternative
+//                );
+//
+//                for (TranscriptionListener listener : transcriptionListeners)
+//                {
+//                    listener.notify(transcriptionResult);
+//                }
             };
         }
 
@@ -298,7 +318,6 @@ public class AmazonTranscriptionService
                 }
             }
 
-
             audioPublisher.pushAudioBytes(request.getAudio());
         }
 
@@ -338,6 +357,7 @@ public class AmazonTranscriptionService
     public class AmazonAudioStreamPublisher implements Publisher<AudioStream>
     {
         private final BytePipe bytePipe;
+        private SubscriptionImpl currentSubscription;
 
         public AmazonAudioStreamPublisher(int bufferSize)
                 throws IOException
@@ -348,7 +368,13 @@ public class AmazonTranscriptionService
         @Override
         public void subscribe(Subscriber<? super AudioStream> subscriber)
         {
-            subscriber.onSubscribe(new SubscriptionImpl(subscriber, bytePipe));
+            currentSubscription = new SubscriptionImpl(subscriber, bytePipe);
+            subscriber.onSubscribe(currentSubscription);
+        }
+
+        public Duration getCurrentSubscriptionMutedDuration()
+        {
+            return currentSubscription.mutedDuration;
         }
 
         public void pushAudioBytes(byte[] bytes)
@@ -373,7 +399,9 @@ public class AmazonTranscriptionService
         private final ExecutorService executor = Executors.newSingleThreadExecutor();
         private final AtomicLong demand = new AtomicLong(0);
         private final BytePipe bytePipe;
+
         private Instant lastAudioPacketSentAt;
+        private Duration mutedDuration;
 
         public SubscriptionImpl(Subscriber<? super AudioStream> subscriber, BytePipe bytePipe)
         {
@@ -407,7 +435,15 @@ public class AmazonTranscriptionService
                             if (lastAudioPacketSentAt != null)
                             {
                                 Duration delta = Duration.between(lastAudioPacketSentAt, now);
-                                logger.info("Audio packet delta: " + delta.getSeconds() + "s, " + delta.getNano() + "ns");
+
+                                if (delta.getSeconds() > 2)
+                                {
+                                    // TODO: participant has likely muted his microphone. This is a strong assumption,
+                                    //       but we can't do better at this point :(
+
+                                    mutedDuration = mutedDuration.plusSeconds(delta.getSeconds());
+                                    mutedDuration = mutedDuration.plusNanos(delta.getNano());
+                                }
                             }
 
                             lastAudioPacketSentAt = now;

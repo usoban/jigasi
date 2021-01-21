@@ -58,7 +58,7 @@ public class AmazonTranscriptResultPublisher
         transcriptChannel.exchangeDeclarePassive(TRANSCRIPT_EXCHANGE_NAME);
     }
 
-    public void publish(TranscriptEvent transcriptEvent)
+    public void publish(TranscriptEvent transcriptEvent, TranscriptResult adjustedTranscriptResult)
     {
         Result result = transcriptEvent.transcript().results().get(0);
 
@@ -69,48 +69,48 @@ public class AmazonTranscriptResultPublisher
 
         publishRawTranscriptResult(result);
 
-        Alternative firstAlternative = result.alternatives().get(0);
+//        Alternative firstAlternative = result.alternatives().get(0);
 
-        List<Sentence> sentences = breakAlternativeIntoSentences(firstAlternative);
+        List<Sentence> sentences = breakAlternativeIntoSentences(adjustedTranscriptResult);
 
         UUID transcriptId = UUID.randomUUID();
         for (Sentence s : sentences)
         {
-            logger.info("[Participant " + participant.getId() + "] Sentence: " + s.getContent());
+            logger.info("[Participant " + participant.getId() + "] Sentence [" + s.getStartTime() + " - " + s.getEndTime() + "]: " + s.getContent());
             publishSentence(s, transcriptId);
         }
     }
 
-    private List<Sentence> breakAlternativeIntoSentences(Alternative transcriptAlternative)
+    private List<Sentence> breakAlternativeIntoSentences(TranscriptResult result)
     {
         List<Sentence> sentences = new LinkedList<>();
         Sentence currentSentence = null;
 
-        List<Item> items = transcriptAlternative.items();
-        Item lastItem = null;
-        for (Item item : items)
+        List<TranscriptItem> items = result.items;
+        TranscriptItem lastItem = null;
+        for (TranscriptItem item : items)
         {
             lastItem = item;
 
             if (currentSentence == null)
             {
-                currentSentence = new Sentence(item.startTime());
+                currentSentence = new Sentence(item.startTime);
             }
 
-            if (item.type().equals(ItemType.PUNCTUATION))
+            if (item.type.equals(ItemType.PUNCTUATION))
             {
-                String content = item.content();
+                String content = item.content;
 
                 switch (content) {
                     case ".":
                     case "!":
-                        currentSentence.finish(Sentence.SentenceType.NON_QUESTION, item.endTime());
+                        currentSentence.finish(Sentence.SentenceType.NON_QUESTION, item.endTime);
                         sentences.add(currentSentence);
                         currentSentence = null;
                         break;
 
                     case "?":
-                        currentSentence.finish(Sentence.SentenceType.QUESTION, item.endTime());
+                        currentSentence.finish(Sentence.SentenceType.QUESTION, item.endTime);
                         sentences.add(currentSentence);
                         currentSentence = null;
                         break;
@@ -126,9 +126,9 @@ public class AmazonTranscriptResultPublisher
                         break;
                 }
             }
-            else if (item.type().equals(ItemType.PRONUNCIATION))
+            else if (item.type.equals(ItemType.PRONUNCIATION))
             {
-                currentSentence.addUtterance(item.content());
+                currentSentence.addUtterance(item.content);
             }
             else
             {
@@ -139,7 +139,7 @@ public class AmazonTranscriptResultPublisher
         if (currentSentence != null && !currentSentence.isEmpty())
         {
             // Could it happen that alternative ends without a punctuation?
-            currentSentence.finish(Sentence.SentenceType.NON_QUESTION, lastItem.endTime());
+            currentSentence.finish(Sentence.SentenceType.NON_QUESTION, lastItem.endTime);
             sentences.add(currentSentence);
             logger.warn("Transcript alternative ended without a punctuation; still adding to list of sentences.");
         }
