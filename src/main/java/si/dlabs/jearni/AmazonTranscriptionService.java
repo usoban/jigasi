@@ -227,6 +227,12 @@ public class AmazonTranscriptionService
                     return;
                 }
 
+                while (recognitionSessionStartDatetime == null)
+                {
+                    // just wait....
+                    logger.warn("Recognition session start datetime still not set, waiting...");
+                }
+
                 String conferenceId = Utils.getCleanRoomName(participant);
                 TranscriptResult adjustedTranscriptResult = CallClock.adjustRelativeToStartOfCall(
                         conferenceId,
@@ -240,7 +246,6 @@ public class AmazonTranscriptionService
                     return;
                 }
 
-                // TODO: .....
                 resultPublisher.publish(event, adjustedTranscriptResult);
 
 //                Result firstResult = event.transcript().results().get(0);
@@ -445,7 +450,6 @@ public class AmazonTranscriptionService
                                     mutedDuration = mutedDuration.plusNanos(delta.getNano());
                                 }
                             }
-
                             lastAudioPacketSentAt = now;
 
                             subscriber.onNext(audioEvent);

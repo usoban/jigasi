@@ -37,7 +37,7 @@ public class CallClock
     )
     {
         Instant callStartDatetime = callStartDatetimes.get(callId);
-        logger.info("Adjusting for callId = " + callId + " with start = " + callStartDatetime.toString());
+//        logger.info("Adjusting for callId = " + callId + " with start = " + callStartDatetime.toString());
 
         Duration callStartToSessionStartDelta = Duration.between(callStartDatetime, recognitionSessionStartDatetime);
         Duration totalAdjustmentDuration = callStartToSessionStartDelta.plus(recognitionSessionMutedDuration);
